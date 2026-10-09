@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="sv">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -299,6 +299,17 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 .sheet .hd h2{font-family:var(--display);font-weight:800;font-size:24px;text-transform:uppercase;margin:0;flex:1;min-width:0}
 .sheet .ft{display:flex;gap:8px;justify-content:flex-end;margin-top:18px;position:sticky;bottom:0;padding-top:10px;background:linear-gradient(transparent,var(--bg) 30%)}
 
+.remind{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--bad-soft);border:1px solid rgba(255,106,92,.25)}
+.remind .t{flex:1;min-width:220px;font-size:14px}
+.remind .t b{display:block;font-weight:600}
+.remind .t span{color:var(--muted);font-size:13px}
+.btn.wa{background:#25D366;color:#062B15;display:inline-flex;align-items:center;gap:8px;padding:11px 16px;font-size:15px}
+.opt.locked{cursor:default}
+.callout.lockmsg{display:flex;gap:8px;align-items:flex-start;text-align:left;background:rgba(255,255,255,.04);border:1px solid var(--line-2);color:var(--muted);margin:0}
+.callout.lockmsg b{color:var(--text)}
+.callout.lockmsg svg{flex:none;margin-top:3px}
+.dayhead .st svg{vertical-align:-2px}
+.bar .in.confirm{border-color:rgba(247,198,0,.45)}
 @media (min-width:760px){
   .scrim{align-items:center}
   .sheet{border-radius:22px;border-bottom:1px solid var(--line-2)}
@@ -318,7 +329,7 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 </style>
 </head>
 <body>
-<div id="app"><div class="loading"><div class="spin"></div><div>Laddar…</div></div></div>
+<div id="app"><div class="loading"><div class="spin"></div><div>Loading…</div></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -327,6 +338,7 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 const SB_URL = "https://cimqebnwkotpbvqmshhh.supabase.co";
 const SB_KEY = "sb_publishable_sgNS0eE-w93tj2StcjAUrg_-mygpcYc";
 const TEAM = "AIK Fotboll Damer";
+const CONTACT = "Micke";
 
 /* ---------- utils ---------- */
 const $app = document.getElementById("app");
@@ -334,10 +346,17 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const store = {
   get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
   set(k,v){ try { localStorage.setItem(k,v); } catch(e){} },
-  del(k){ try { localStorage.removeItem(k); } catch(e){} },
   sget(k){ try { return sessionStorage.getItem(k); } catch(e){ return null; } },
   sset(k,v){ try { sessionStorage.setItem(k,v); } catch(e){} },
   sdel(k){ try { sessionStorage.removeItem(k); } catch(e){} },
+};
+const SERVER_MSG = {
+  "Ogiltig dag.": "Invalid day.",
+  "Veckan måste börja på en måndag.": "The week must start on a Monday.",
+  "Menyn kunde inte läsas.": "The menu couldn't be read.",
+  "Namn och typ krävs.": "Name and type are required.",
+  "Namn krävs.": "Name is required.",
+  "Lösenordet måste vara minst 8 tecken.": "The password must be at least 8 characters.",
 };
 async function rpc(fn, args = {}) {
   let r;
@@ -347,10 +366,10 @@ async function rpc(fn, args = {}) {
       headers: { apikey: SB_KEY, "Content-Type": "application/json" },
       body: JSON.stringify(args),
     });
-  } catch (e) { throw new Error("Ingen anslutning. Kontrollera internet och försök igen."); }
+  } catch (e) { throw new Error("No connection. Check your internet and try again."); }
   const j = await r.json().catch(() => null);
-  if (!r.ok) throw new Error((j && (j.message || j.hint)) || "Något gick fel. Försök igen.");
-  if (j && j.error) throw new Error(j.error);
+  if (!r.ok) throw new Error((j && (SERVER_MSG[j.message] || j.message)) || "Something went wrong. Try again.");
+  if (j && j.error) throw new Error(SERVER_MSG[j.error] || j.error);
   return j;
 }
 let toastT;
@@ -359,10 +378,11 @@ function toast(msg, err = false) {
   t.textContent = msg; t.className = "toast show" + (err ? " err" : "");
   clearTimeout(toastT); toastT = setTimeout(() => t.className = "toast" + (err ? " err" : ""), err ? 4200 : 2400);
 }
-const MON = ["jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"];
-const WD = ["sön","mån","tis","ons","tor","fre","lör"];
+const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MON_SV = ["jan","feb","mar","apr","maj","jun","jul","aug","sep","okt","nov","dec"];
 function pd(s){ const [y,m,d] = s.slice(0,10).split("-").map(Number); return new Date(Date.UTC(y,m-1,d)); }
 function fmtDay(s){ const d = pd(s); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; }
+function fmtDaySv(s){ const d = pd(s); return `${d.getUTCDate()} ${MON_SV[d.getUTCMonth()]}`; }
 function fmtShort(s){ const d = pd(s); return `${d.getUTCDate()}/${d.getUTCMonth()+1}`; }
 function isoWeek(s){
   const d = pd(s); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day + 3);
@@ -371,18 +391,16 @@ function isoWeek(s){
 }
 function addDays(s, n){ const d = pd(s); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
 function fmtStamp(ts){
-  const d = new Date(ts);
-  const p = new Intl.DateTimeFormat("sv-SE",{timeZone:"Europe/Stockholm",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(d);
-  return p.replace(/\./g,"");
+  return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Stockholm",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(ts));
 }
 function countdown(ms){
-  if (ms <= 0) return "stängd";
+  if (ms <= 0) return "closed";
   const m = Math.floor(ms/6e4), d = Math.floor(m/1440), h = Math.floor((m%1440)/60), mm = m%60;
-  if (d > 0) return `${d} d ${h} h`;
-  if (h > 0) return `${h} h ${mm} min`;
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${mm}m`;
   return `${mm} min`;
 }
-const TAGS = { G:"Glutenfri", L:"Laktosfri", V:"Vegetarisk", NY:"Nyhet" };
+const TAGS = { G:"Gluten-free", L:"Lactose-free", V:"Vegetarian", NY:"New" };
 const DIET = ["G","L"];
 const chips = tags => {
   tags = tags || [];
@@ -390,14 +408,16 @@ const chips = tags => {
   const rest = tags.filter(t => !DIET.includes(t));
   return (diet ? `<span class="diets">${diet}</span>` : "") + (rest.length ? `<div class="chips">${rest.map(t => `<span class="chip ${esc(t)}">${esc(TAGS[t] || t)}</span>`).join("")}</div>` : "");
 };
-const legend = `<div class="legend"><span class="diet G">G</span> Glutenfri <span class="diet L">L</span> Laktosfri</div>`;
+const legend = `<div class="legend"><span class="diet G">G</span> Gluten-free <span class="diet L">L</span> Lactose-free</div>`;
 const ICON = {
   check:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   bigcheck:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  lock:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>',
   search:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   left:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M15 5l-7 7 7 7"/></svg>',
   right:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M9 5l7 7-7 7"/></svg>',
   refresh:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/></svg>',
+  wa:'<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 001.8-1.2 2.2 2.2 0 00.1-1.2c0-.2-.2-.2-.5-.4z"/></svg>',
 };
 const topbar = (sub, right = "") => `
   <header class="top">
@@ -407,36 +427,43 @@ const topbar = (sub, right = "") => `
   </header>`;
 
 /* ---------- shared order form ---------- */
-function blankDay(){ return { dish:null, skip:false, gluten:false, lactose:false, note:"" }; }
-function fromServer(o){ return o ? { dish:o.dish ?? null, skip:!!o.skip, gluten:!!o.gluten, lactose:!!o.lactose, note:o.note || "" } : blankDay(); }
+function blankDay(){ return { dish:null, skip:false, note:"" }; }
+function fromServer(o){ return o ? { dish:o.dish ?? null, skip:!!o.skip, note:o.note || "" } : blankDay(); }
 function dayChosen(d){ return !!(d && (d.dish || d.skip)); }
 function toPayload(d){ return dayChosen(d) ? { dish:d.skip ? null : d.dish, skip:d.skip, gluten:false, lactose:false, note:d.note } : null; }
+function choiceText(d, list){ return d.skip ? "Not eating" : (list.find(x => x.id === d.dish)?.name || "—"); }
 
-function daySection(key, label, dateStr, dishes, d, scope){
+function daySection(key, label, dateStr, dishes, d, scope, locked = false){
   const chosen = dayChosen(d);
-  const sel = dishes.find(x => x.id === d.dish);
+  const short = label.slice(0,3);
+  const head = `<div class="dayhead"><span class="tag">${short}</span><h2>${esc(label)} ${fmtDay(dateStr)}</h2>
+      <span class="st ${chosen ? "ok" : ""}">${locked ? `${ICON.lock} Sent` : chosen ? "Chosen ✓" : "Not chosen"}</span></div>`;
+  if (locked) {
+    const sel = dishes.find(x => x.id === d.dish);
+    return head + `<div class="opt on locked"><span class="rd"></span><span class="t">${d.skip ? "Not eating this day" : esc(sel ? sel.name : "—")}${sel ? chips(sel.tags) : ""}
+      ${d.note ? `<span class="by" style="color:var(--gold)">${esc(d.note)}</span>` : ""}</span></div>`;
+  }
   let body;
   if (!dishes.length) {
-    body = `<div class="empty">${key === "tue" ? "Tisdagsmenyn är inte upplagd än. Välj torsdag nu och kom tillbaka senare." : "Ingen meny upplagd."}</div>`;
+    body = `<div class="empty">${key === "tue" ? "The Tuesday menu isn't up yet. Pick Thursday now and come back later." : "No menu yet."}</div>`;
   } else {
     body = `<div class="opts" role="radiogroup" aria-label="${esc(label)}">` +
       dishes.map(x => `<button type="button" class="opt ${d.dish === x.id && !d.skip ? "on" : ""}" role="radio" aria-checked="${d.dish === x.id && !d.skip}"
           data-act="pick" data-scope="${scope}" data-day="${key}" data-id="${x.id}">
           <span class="rd"></span><span class="t">${esc(x.name)}${chips(x.tags)}</span></button>`).join("") +
       `<button type="button" class="opt skip ${d.skip ? "on" : ""}" role="radio" aria-checked="${d.skip}" data-act="skip" data-scope="${scope}" data-day="${key}">
-          <span class="rd"></span><span class="t">Äter inte denna dag</span></button></div>`;
+          <span class="rd"></span><span class="t">Not eating this day</span></button></div>`;
     if (d.dish && !d.skip) {
       body += `<div class="extras">
-        <input class="field" id="note-${scope}-${key}" maxlength="120" placeholder="Utan… (t.ex. ej sås, ingen lök)" value="${esc(d.note)}" data-act="note" data-scope="${scope}" data-day="${key}" autocomplete="off">
+        <input class="field" id="note-${scope}-${key}" maxlength="120" placeholder="Without… (e.g. no sauce, no onion)" value="${esc(d.note)}" data-act="note" data-scope="${scope}" data-day="${key}" autocomplete="off">
       </div>`;
     }
   }
-  return `<div class="dayhead"><span class="tag">${label.slice(0,3)}</span><h2>${esc(label)} ${fmtDay(dateStr)}</h2>
-      <span class="st ${chosen ? "ok" : ""}">${chosen ? "Vald ✓" : "Ej vald"}</span></div>${dishes.some(x => (x.tags || []).some(t => DIET.includes(t))) ? legend : ""}${body}`;
+  return head + (dishes.some(x => (x.tags || []).some(t => DIET.includes(t))) ? legend : "") + body;
 }
 
 /* ---------- PLAYER ---------- */
-const P = { state:null, view:"names", person:null, draft:null, q:"", saving:false, skew:0 };
+const P = { state:null, view:"names", person:null, draft:null, locked:{tue:false,thu:false}, q:"", saving:false, confirm:false, skew:0, loadingOrder:false };
 
 async function playerLoad(){
   P.state = await rpc("get_state");
@@ -444,6 +471,7 @@ async function playerLoad(){
 }
 function nowServer(){ return Date.now() + P.skew; }
 function personById(id){ return P.state.people.find(p => p.id === id); }
+const first = n => n.split(" ")[0];
 
 function renderPlayer(){
   const s = P.state; if (!s) return;
@@ -451,7 +479,7 @@ function renderPlayer(){
   const ms = new Date(s.deadline).getTime() - nowServer();
   const open = ms > 0;
   const total = s.people.length, done = s.people.filter(p => p.done).length;
-  let html = `<div class="wrap">` + topbar("Lunchbeställning", `<span class="wk">v.${wk}</span>`);
+  let html = `<div class="wrap">` + topbar("Lunch orders", `<span class="wk">Wk ${wk}</span>`);
 
   if (P.view === "names") {
     const last = Number(store.get("aik_person"));
@@ -461,75 +489,96 @@ function renderPlayer(){
     const players = list.filter(p => p.kind === "player"), staff = list.filter(p => p.kind === "staff");
     const card = p => `<button type="button" class="nm ${p.done ? "done" : ""}" data-act="person" data-id="${p.id}">
         <span class="num ${p.kind === "staff" ? "staff" : ""}">${esc(p.tag || "")}</span>
-        <span class="t">${esc(p.name)}<small>${p.done ? "Beställt" : "Ej beställt"}</small></span>
+        <span class="t">${esc(p.name)}<small>${p.done ? "Ordered" : "Not ordered"}</small></span>
         ${p.done ? `<span class="check">${ICON.check}</span>` : ""}</button>`;
     html += `
       <section class="fixture">
-        <div class="eyebrow">Vecka ${wk}</div>
-        <h1>Välj din lunch</h1>
+        <div class="eyebrow">Week ${wk}</div>
+        <h1>Pick your lunch</h1>
         <div class="days">
-          <div class="day"><small>Tisdag</small><strong>${fmtDay(s.tue_date)}</strong></div>
-          <div class="day"><small>Torsdag</small><strong>${fmtDay(s.thu_date)}</strong></div>
+          <div class="day"><small>Tuesday</small><strong>${fmtDay(s.tue_date)}</strong></div>
+          <div class="day"><small>Thursday</small><strong>${fmtDay(s.thu_date)}</strong></div>
         </div>
         <div class="deadline"><span class="pulse ${open ? "" : "closed"}"></span>
-          ${open ? `Stänger om <b data-cd>${countdown(ms)}</b> · sön ${fmtDay(addDays(s.week,-1))} kl 13:00` : `<b>Beställningen har stängt.</b>`}</div>
+          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · Sun ${fmtDay(addDays(s.week,-1))} at 13:00` : `<b>Ordering has closed.</b>`}</div>
         <div class="meter"><i style="width:${total ? Math.round(done/total*100) : 0}%"></i></div>
-        <div class="meter-l">${done} av ${total} har beställt</div>
+        <div class="meter-l">${done} of ${total} have ordered</div>
       </section>
       ${lp ? `<button type="button" class="resume" data-act="person" data-id="${lp.id}">
           <span class="num ${lp.kind === "staff" ? "staff" : ""}">${esc(lp.tag || "")}</span>
-          <span class="t"><small>Fortsätt som</small><b>${esc(lp.name)}</b></span><span class="go">${lp.done ? "Ändra" : "Beställ"} →</span></button>` : ""}
-      <div class="search">${ICON.search}<input id="q" type="search" placeholder="Sök ditt namn eller nummer" value="${esc(P.q)}" autocomplete="off" aria-label="Sök namn"></div>
-      ${players.length ? `<div class="sec"><h2>Spelare</h2><span class="hint">Tryck på ditt namn</span></div><div class="names">${players.map(card).join("")}</div>` : ""}
-      ${staff.length ? `<div class="sec"><h2>Ledare</h2></div><div class="names">${staff.map(card).join("")}</div>` : ""}
-      ${!players.length && !staff.length ? `<div class="empty" style="margin-top:16px">Inget namn matchar “${esc(P.q)}”. Prata med ansvarig för maten om du saknas.</div>` : ""}
-      <div class="foot">${esc(TEAM)} · <a href="#admin">Admin</a></div>`;
-    html += `</div>`;
+          <span class="t"><small>Continue as</small><b>${esc(lp.name)}</b></span><span class="go">${lp.done ? "View" : "Order"} →</span></button>` : ""}
+      <div class="search">${ICON.search}<input id="q" type="search" placeholder="Search your name or number" value="${esc(P.q)}" autocomplete="off" aria-label="Search name"></div>
+      ${players.length ? `<div class="sec"><h2>Players</h2><span class="hint">Tap your name</span></div><div class="names">${players.map(card).join("")}</div>` : ""}
+      ${staff.length ? `<div class="sec"><h2>Staff</h2></div><div class="names">${staff.map(card).join("")}</div>` : ""}
+      ${!players.length && !staff.length ? `<div class="empty" style="margin-top:16px">No name matches “${esc(P.q)}”. Message ${CONTACT} if you're missing.</div>` : ""}
+      <div class="foot">Once you've sent your order, only ${CONTACT} can change it.<br>${esc(TEAM)} · <a href="#admin">Admin</a></div></div>`;
     $app.innerHTML = html;
     return;
   }
 
-  const p = P.person;
+  const p = P.person, dr = P.draft;
+  const who = `<div class="who"><span class="num ${p.kind === "staff" ? "staff" : ""}">${esc(p.tag || "")}</span>
+      <div style="flex:1;min-width:0"><h1>${esc(first(p.name))}</h1><p>${esc(p.name)} · week ${wk}</p></div>
+      <button type="button" class="linkbtn" data-act="back">Not you?</button></div>`;
+
+  if (P.loadingOrder) {
+    $app.innerHTML = html + who + `<div class="loading" style="min-height:30vh"><div class="spin"></div></div></div>`;
+    return;
+  }
+
   if (P.view === "order") {
-    const dr = P.draft;
-    html += `
-      <div class="who"><span class="num ${p.kind === "staff" ? "staff" : ""}">${esc(p.tag || "")}</span>
-        <div style="flex:1;min-width:0"><h1>${esc(p.name.split(" ")[0])}</h1><p>${esc(p.name)} · vecka ${wk}</p></div>
-        <button type="button" class="linkbtn" data-act="back">Inte du?</button></div>
-      ${open ? "" : `<div class="closed-note">Beställningen för vecka ${wk} har stängt. Prata med ansvarig för maten om något behöver ändras.</div>`}
-      ${daySection("tue","Tisdag", s.tue_date, s.tue, dr.tue, "p")}
-      ${daySection("thu","Torsdag", s.thu_date, s.thu, dr.thu, "p")}
-      <div class="foot">Du kan ändra ditt val fram till söndag kl 13:00.</div></div>`;
-    const tS = dr.tue.skip ? "Äter inte" : (s.tue.find(x => x.id === dr.tue.dish)?.name || "—");
-    const hS = dr.thu.skip ? "Äter inte" : (s.thu.find(x => x.id === dr.thu.dish)?.name || "—");
-    const any = dayChosen(dr.tue) || dayChosen(dr.thu);
-    html += `<div class="bar"><div class="in">
-      <div class="sum"><b>Tis:</b> ${esc(tS)}<br><b>Tor:</b> ${esc(hS)}</div>
-      <button type="button" class="btn" data-act="submit" ${(!any || !open || P.saving) ? "disabled" : ""}>${P.saving ? "Sparar…" : "Skicka"}</button>
-    </div></div>`;
+    const allLocked = P.locked.tue && P.locked.thu;
+    if (allLocked) {
+      html += who + `<div class="done-card">
+          <div class="big">${ICON.bigcheck}</div>
+          <h1>Order sent</h1>
+          <p>Your lunch for week ${wk} is booked.</p>
+          <div class="recap">
+            <div><small>Tuesday ${fmtDay(s.tue_date)}</small>${esc(choiceText(dr.tue, s.tue))}${dr.tue.note ? ` · <span style="color:var(--gold)">${esc(dr.tue.note)}</span>` : ""}</div>
+            <div><small>Thursday ${fmtDay(s.thu_date)}</small>${esc(choiceText(dr.thu, s.thu))}${dr.thu.note ? ` · <span style="color:var(--gold)">${esc(dr.thu.note)}</span>` : ""}</div>
+          </div>
+          <div class="callout lockmsg">${ICON.lock}<span>Need to change something? Message <b>${CONTACT}</b> and he'll update it for you.</span></div>
+          <div style="margin-top:16px"><button type="button" class="btn" data-act="back">Done</button></div>
+        </div></div>`;
+      $app.innerHTML = html;
+      return;
+    }
+    html += who +
+      (open ? "" : `<div class="closed-note">Ordering for week ${wk} has closed. Message ${CONTACT} if something needs changing.</div>`) +
+      daySection("tue","Tuesday", s.tue_date, s.tue, dr.tue, "p", P.locked.tue) +
+      daySection("thu","Thursday", s.thu_date, s.thu, dr.thu, "p", P.locked.thu) +
+      `<div class="foot">After you send, your choices are locked. Message ${CONTACT} to change them.</div></div>`;
+    const any = (!P.locked.tue && dayChosen(dr.tue)) || (!P.locked.thu && dayChosen(dr.thu));
+    if (P.confirm) {
+      html += `<div class="bar"><div class="in confirm">
+        <div class="sum"><b>Send your order?</b><br>You can't change it yourself afterwards.</div>
+        <button type="button" class="btn ghost sm" data-act="unconfirm">Back</button>
+        <button type="button" class="btn" data-act="submit" ${P.saving ? "disabled" : ""}>${P.saving ? "Sending…" : "Send"}</button>
+      </div></div>`;
+    } else {
+      html += `<div class="bar"><div class="in">
+        <div class="sum"><b>Tue:</b> ${esc(choiceText(dr.tue, s.tue))}<br><b>Thu:</b> ${esc(choiceText(dr.thu, s.thu))}</div>
+        <button type="button" class="btn" data-act="review" ${(!any || !open) ? "disabled" : ""}>Send</button>
+      </div></div>`;
+    }
     $app.innerHTML = html;
     return;
   }
 
   if (P.view === "done") {
-    const dr = P.draft;
-    const line = (k, list) => dr[k].skip ? "Äter inte" : (list.find(x => x.id === dr[k].dish)?.name || "Inget valt");
-    const extra = k => { const d = dr[k]; const f = [d.gluten && "glutenfri", d.lactose && "laktosfri", d.note && d.note].filter(Boolean); return f.length ? ` · <span style="color:var(--gold)">${esc(f.join(", "))}</span>` : ""; };
-    const missing = !dayChosen(dr.tue) ? "tisdag" : !dayChosen(dr.thu) ? "torsdag" : "";
+    const missing = !dayChosen(dr.tue) ? "Tuesday" : !dayChosen(dr.thu) ? "Thursday" : "";
     html += `<div class="done-card">
         <div class="big">${ICON.bigcheck}</div>
-        <h1>Klart, ${esc(p.name.split(" ")[0])}!</h1>
-        <p>Din beställning för vecka ${wk} är sparad.</p>
+        <h1>Thanks, ${esc(first(p.name))}!</h1>
+        <p>Your order for week ${wk} is saved.</p>
         <div class="recap">
-          <div><small>Tisdag ${fmtDay(s.tue_date)}</small>${esc(line("tue", s.tue))}${extra("tue")}</div>
-          <div><small>Torsdag ${fmtDay(s.thu_date)}</small>${esc(line("thu", s.thu))}${extra("thu")}</div>
+          <div><small>Tuesday ${fmtDay(s.tue_date)}</small>${esc(dayChosen(dr.tue) ? choiceText(dr.tue, s.tue) : "Nothing chosen yet")}${dr.tue.note ? ` · <span style="color:var(--gold)">${esc(dr.tue.note)}</span>` : ""}</div>
+          <div><small>Thursday ${fmtDay(s.thu_date)}</small>${esc(dayChosen(dr.thu) ? choiceText(dr.thu, s.thu) : "Nothing chosen yet")}${dr.thu.note ? ` · <span style="color:var(--gold)">${esc(dr.thu.note)}</span>` : ""}</div>
         </div>
-        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">Du har inte valt något för ${missing}. Kom tillbaka och välj innan söndag kl 13:00.</div>` : ""}
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button type="button" class="btn ghost" data-act="edit">Ändra</button>
-          <button type="button" class="btn" data-act="back">Klar</button>
-        </div>
-      </div><div class="foot">Ändringar går att göra fram till sön ${fmtDay(addDays(s.week,-1))} kl 13:00.</div></div>`;
+        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">You haven't picked anything for ${missing}. Come back and choose before Sunday at 13:00.</div>` : ""}
+        <div class="callout lockmsg">${ICON.lock}<span>Need to change something? Message <b>${CONTACT}</b>.</span></div>
+        <div style="margin-top:16px"><button type="button" class="btn" data-act="back">Done</button></div>
+      </div></div>`;
     $app.innerHTML = html;
   }
 }
@@ -537,27 +586,29 @@ function renderPlayer(){
 async function openPerson(id){
   const p = personById(id); if (!p) return;
   P.person = p; store.set("aik_person", String(id));
-  P.draft = { tue: blankDay(), thu: blankDay() }; P.view = "order"; renderPlayer();
+  P.draft = { tue: blankDay(), thu: blankDay() }; P.locked = { tue:false, thu:false };
+  P.view = "order"; P.confirm = false; P.loadingOrder = true; renderPlayer(); window.scrollTo({ top: 0 });
   try {
     const o = await rpc("get_order", { p_person: id, p_week: P.state.week });
     if (P.person && P.person.id === id) {
-      P.draft = { tue: fromServer(o && o.tue), thu: fromServer(o && o.thu) };
-      // drop choices for dishes no longer on the menu
-      ["tue","thu"].forEach(k => { const d = P.draft[k]; if (d.dish && !P.state[k].some(x => x.id === d.dish)) P.draft[k] = blankDay(); });
-      renderPlayer();
+      ["tue","thu"].forEach(k => {
+        const srv = o && o[k];
+        if (srv && (srv.dish || srv.skip)) { P.draft[k] = fromServer(srv); P.locked[k] = true; }
+      });
     }
   } catch (e) { toast(e.message, true); }
-  window.scrollTo({ top: 0 });
+  P.loadingOrder = false; renderPlayer();
 }
 
 async function submitPlayer(){
   if (P.saving) return;
   P.saving = true; renderPlayer();
   try {
-    await rpc("submit_order", { p_person: P.person.id, p_week: P.state.week, p_tue: toPayload(P.draft.tue), p_thu: toPayload(P.draft.thu) });
+    await rpc("submit_order", { p_person: P.person.id, p_week: P.state.week,
+      p_tue: P.locked.tue ? null : toPayload(P.draft.tue), p_thu: P.locked.thu ? null : toPayload(P.draft.thu) });
     const me = personById(P.person.id); if (me) me.done = dayChosen(P.draft.tue) && dayChosen(P.draft.thu);
-    P.view = "done"; window.scrollTo({ top: 0 });
-  } catch (e) { toast(e.message, true); }
+    P.view = "done"; P.confirm = false; window.scrollTo({ top: 0 });
+  } catch (e) { toast(e.message, true); P.confirm = false; }
   P.saving = false; renderPlayer();
 }
 
@@ -570,7 +621,7 @@ async function adminLoad(week){
   if (!A.mailTo) A.mailTo = d.caterer_email || "";
 }
 function aOrders(){ const m = {}; (A.data.orders || []).forEach(o => { (m[o.person] = m[o.person] || {})[o.day] = o; }); return m; }
-function dishName(day, id){ const x = A.data[day].find(d => d.id === id); return x ? x.name : "(borttagen rätt)"; }
+function dishName(day, id){ const x = A.data[day].find(d => d.id === id); return x ? x.name : "(removed dish)"; }
 function computeDay(day){
   const om = aOrders(); const people = A.data.people;
   const counts = new Map(A.data[day].filter(d => d.active).map(d => [d.id, 0]));
@@ -580,40 +631,45 @@ function computeDay(day){
     if (!o) { if (p.active) missing.push(p); return; }
     if (o.skip) { skipped.push(p); return; }
     counts.set(o.dish, (counts.get(o.dish) || 0) + 1);
-    const f = [o.gluten && "glutenfri", o.lactose && "laktosfri", o.note].filter(Boolean);
-    if (f.length) notes.push({ p, dish:o.dish, f });
+    if (o.note) notes.push({ p, dish:o.dish, note:o.note });
   });
   const extras = new Map((A.data.extras || []).filter(e => e.day === day).map(e => [e.dish, e.qty]));
   const ordered = [...counts.values()].reduce((a,b) => a+b, 0);
   const extraSum = [...extras.values()].reduce((a,b) => a+b, 0);
   return { counts, notes, missing, skipped, extras, ordered, extraSum, total: ordered + extraSum };
 }
+function missingBoth(){ const om = aOrders(); return A.data.people.filter(p => p.active).filter(p => { const o = om[p.id] || {}; return !o.tue || !o.thu; }); }
+function reminderText(){
+  const wk = isoWeek(A.data.week);
+  const names = missingBoth().map(p => { const [f, l] = p.name.split(" "); return f + (l ? " " + l.charAt(0) + "." : ""); });
+  return `🍽️ Lunch week ${wk}: please order before Sunday at 13:00!\nStill missing: ${names.join(", ")}\n👉 ${location.origin + location.pathname}`;
+}
 function statusPill(){
   const d = A.data;
-  if (d.sent_at) return `<span class="pill sent">Skickad ${esc(fmtStamp(d.sent_at))}</span>`;
-  if (d.locked) return `<span class="pill locked">Låst · redo att skicka</span>`;
-  return `<span class="pill open">Öppen · stänger sön 13:00</span>`;
+  if (d.sent_at) return `<span class="pill sent">Sent ${esc(fmtStamp(d.sent_at))}</span>`;
+  if (d.locked) return `<span class="pill locked">Locked · ready to send</span>`;
+  return `<span class="pill open">Open · closes Sun 13:00</span>`;
 }
 
 function renderAdmin(){
   if (!A.pw || !A.data) return renderLogin();
   const d = A.data, wk = isoWeek(d.week);
-  let html = `<div class="wrap wide">` + topbar("Admin · Lunch", `<button class="btn sm dark" data-act="logout">Logga ut</button>`);
+  let html = `<div class="wrap wide">` + topbar("Admin · Lunch", `<button class="btn sm dark" data-act="logout">Log out</button>`);
   html += `<div class="weekbar">
-      <div class="nav"><button class="iconbtn" data-act="wk" data-d="-7" aria-label="Föregående vecka">${ICON.left}</button>
-      <button class="iconbtn" data-act="wk" data-d="7" aria-label="Nästa vecka">${ICON.right}</button></div>
-      <div style="min-width:0"><h1>Vecka ${wk}</h1><div class="dates">Tis ${fmtDay(d.tue_date)} · Tor ${fmtDay(d.thu_date)}</div></div>
+      <div class="nav"><button class="iconbtn" data-act="wk" data-d="-7" aria-label="Previous week">${ICON.left}</button>
+      <button class="iconbtn" data-act="wk" data-d="7" aria-label="Next week">${ICON.right}</button></div>
+      <div style="min-width:0"><h1>Week ${wk}</h1><div class="dates">Tue ${fmtDay(d.tue_date)} · Thu ${fmtDay(d.thu_date)}</div></div>
       <div style="flex:1"></div>${statusPill()}
-      <button class="iconbtn" data-act="reload" aria-label="Uppdatera">${ICON.refresh}</button>
+      <button class="iconbtn" data-act="reload" aria-label="Refresh">${ICON.refresh}</button>
     </div>
-    <nav class="tabs">${[["overview","Översikt"],["orders","Beställningar"],["menus","Menyer"],["send","Skicka"],["settings","Inställningar"]]
+    <nav class="tabs">${[["overview","Overview"],["orders","Orders"],["menus","Menus"],["send","Send"],["settings","Settings"]]
       .map(([k,l]) => `<button class="tab ${A.tab === k ? "on" : ""}" data-act="tab" data-tab="${k}">${l}</button>`).join("")}</nav>`;
   if (A.tab === "overview") html += viewOverview();
   if (A.tab === "orders") html += viewOrders();
   if (A.tab === "menus") html += viewMenus();
   if (A.tab === "send") html += viewSend();
   if (A.tab === "settings") html += viewSettings();
-  html += `<div class="foot"><a href="#">Till spelarsidan</a></div></div>`;
+  html += `<div class="foot"><a href="#">Go to the player page</a></div></div>`;
   if (A.modal) html += viewModal();
   $app.innerHTML = html;
 }
@@ -621,12 +677,12 @@ function renderAdmin(){
 function renderLogin(){
   $app.innerHTML = `<div class="wrap"><div class="login">
     <img src="logo.png" alt="AIK">
-    <h1>Admin</h1><p>Lunchbeställningar för ${esc(TEAM)}</p>
+    <h1>Admin</h1><p>Lunch orders for ${esc(TEAM)}</p>
     <form id="loginf">
-      <input class="field" id="pw" type="password" placeholder="Lösenord" autocomplete="current-password" required>
-      <button class="btn" type="submit">Logga in</button>
+      <input class="field" id="pw" type="password" placeholder="Password" autocomplete="current-password" required>
+      <button class="btn" type="submit">Log in</button>
     </form>
-    <div class="foot"><a href="#">Till spelarsidan</a></div>
+    <div class="foot"><a href="#">Go to the player page</a></div>
   </div></div>`;
   setTimeout(() => document.getElementById("pw")?.focus(), 50);
 }
@@ -634,54 +690,57 @@ function renderLogin(){
 function viewOverview(){
   const d = A.data, T = computeDay("tue"), H = computeDay("thu");
   const people = d.people.filter(p => p.active).length;
-  const both = d.people.filter(p => p.active).filter(p => { const o = aOrders()[p.id] || {}; return o.tue && o.thu; }).length;
+  const miss = missingBoth();
+  const both = people - miss.length;
   const panel = (day, label, C) => {
     const dishes = d[day].filter(x => x.active);
     return `<div class="panel">
-      <h3>${label} <span style="color:var(--muted);font-size:14px;letter-spacing:.06em">${fmtDay(day === "tue" ? d.tue_date : d.thu_date)}</span><span class="n">${C.total} port.</span></h3>
+      <h3>${label} <span style="color:var(--muted);font-size:14px;letter-spacing:.06em">${fmtDay(day === "tue" ? d.tue_date : d.thu_date)}</span><span class="n">${C.total} meals</span></h3>
       ${dishes.length ? dishes.map(x => { const c = C.counts.get(x.id) || 0, e = C.extras.get(x.id) || 0;
         return `<div class="drow"><span class="c ${c + e ? "" : "zero"}">${c + e}</span>
-          <span class="nmx">${esc(x.name)}${e ? `<small>varav ${e} extra</small>` : ""}</span>
-          <span class="stepper" title="Extra portioner"><button data-act="extra" data-day="${day}" data-id="${x.id}" data-d="-1" aria-label="En extra mindre">−</button>
-          <span class="${e ? "has" : ""}">${e}</span><button data-act="extra" data-day="${day}" data-id="${x.id}" data-d="1" aria-label="En extra till">+</button></span></div>`; }).join("")
-        : `<div class="empty">${day === "tue" ? "Ingen tisdagsmeny för veckan. Lägg in den under Menyer." : "Ingen meny."}</div>`}
-      ${C.notes.length ? `<div class="lbl">Särskilda önskemål</div><div class="notes">${C.notes.map(n => `<div><b>${esc(n.p.name)}</b> · ${esc(dishName(day, n.dish))} · <em>${esc(n.f.join(", "))}</em></div>`).join("")}</div>` : ""}
-      ${C.missing.length ? `<div class="lbl">Har inte beställt (${C.missing.length})</div><div class="plist">${C.missing.map(p => `<span class="pname">${esc(p.name)}</span>`).join("")}</div>` : ""}
-      ${C.skipped.length ? `<div class="lbl">Äter inte (${C.skipped.length})</div><div class="plist">${C.skipped.map(p => `<span class="pname muted">${esc(p.name)}</span>`).join("")}</div>` : ""}
+          <span class="nmx">${esc(x.name)}${chips((x.tags || []).filter(t => DIET.includes(t)))}${e ? `<small>incl. ${e} extra</small>` : ""}</span>
+          <span class="stepper" title="Extra portions"><button data-act="extra" data-day="${day}" data-id="${x.id}" data-d="-1" aria-label="One fewer extra">−</button>
+          <span class="${e ? "has" : ""}">${e}</span><button data-act="extra" data-day="${day}" data-id="${x.id}" data-d="1" aria-label="One more extra">+</button></span></div>`; }).join("")
+        : `<div class="empty">${day === "tue" ? "No Tuesday menu for this week. Add it under Menus." : "No menu."}</div>`}
+      ${C.notes.length ? `<div class="lbl">Special requests</div><div class="notes">${C.notes.map(n => `<div><b>${esc(n.p.name)}</b> · ${esc(dishName(day, n.dish))} · <em>${esc(n.note)}</em></div>`).join("")}</div>` : ""}
+      ${C.missing.length ? `<div class="lbl">Not ordered yet (${C.missing.length})</div><div class="plist">${C.missing.map(p => `<span class="pname">${esc(p.name)}</span>`).join("")}</div>` : ""}
+      ${C.skipped.length ? `<div class="lbl">Not eating (${C.skipped.length})</div><div class="plist">${C.skipped.map(p => `<span class="pname muted">${esc(p.name)}</span>`).join("")}</div>` : ""}
     </div>`;
   };
-  const missingAll = d.people.filter(p => p.active).filter(p => { const o = aOrders()[p.id] || {}; return !o.tue || !o.thu; });
   return `<div class="kpis">
-      <div class="kpi"><small>Klara</small><b>${both}<span style="font-size:18px;color:var(--muted)">/${people}</span></b></div>
-      <div class="kpi"><small>Saknas</small><b class="${missingAll.length ? "bad" : ""}">${missingAll.length}</b></div>
-      <div class="kpi"><small>Tisdag</small><b class="gold">${T.total}</b></div>
-      <div class="kpi"><small>Torsdag</small><b class="gold">${H.total}</b></div>
+      <div class="kpi"><small>Done</small><b>${both}<span style="font-size:18px;color:var(--muted)">/${people}</span></b></div>
+      <div class="kpi"><small>Missing</small><b class="${miss.length ? "bad" : ""}">${miss.length}</b></div>
+      <div class="kpi"><small>Tuesday</small><b class="gold">${T.total}</b></div>
+      <div class="kpi"><small>Thursday</small><b class="gold">${H.total}</b></div>
     </div>
-    ${missingAll.length && !d.locked ? `<div class="toolbar"><button class="btn sm dark" data-act="copyremind">Kopiera påminnelse till WhatsApp</button>
-      <span style="font-size:13px;color:var(--faint)">Listar de ${missingAll.length} som inte är klara</span></div>` : ""}
-    <div class="two">${panel("tue","Tisdag",T)}${panel("thu","Torsdag",H)}</div>
-    <div style="font-size:13px;color:var(--faint);margin-top:10px">Använd − / + för att lägga till extra portioner, till exempel för gäster eller provspelare. De räknas med i mejlet.</div>`;
+    ${miss.length ? `<div class="remind">
+        <div class="t"><b>${miss.length} ${miss.length === 1 ? "person hasn't" : "people haven't"} finished ordering</b>
+          <span>${esc(miss.map(p => p.name).join(", "))}</span></div>
+        <a class="btn wa" href="https://wa.me/?text=${encodeURIComponent(reminderText())}" target="_blank" rel="noopener">${ICON.wa} Send reminder</a>
+        <button class="btn sm dark" data-act="copyremind">Copy text</button>
+      </div>` : `<div class="callout ok">Everyone has ordered for both days.</div>`}
+    <div class="two">${panel("tue","Tuesday",T)}${panel("thu","Thursday",H)}</div>
+    <div style="font-size:13px;color:var(--faint);margin-top:10px">Use − / + to add extra portions, for example for guests or trialists. They're included in the email.</div>`;
 }
 
 function viewOrders(){
   const d = A.data, om = aOrders();
   const cell = (p, day) => {
     const o = (om[p.id] || {})[day];
-    if (!o) return `<span class="miss">Saknas</span>`;
-    if (o.skip) return `<span class="skip">Äter inte</span>`;
-    const f = [o.gluten && "glutenfri", o.lactose && "laktosfri", o.note].filter(Boolean);
-    return `${esc(dishName(day, o.dish))}${f.length ? `<span class="by" style="color:var(--gold)">${esc(f.join(", "))}</span>` : ""}${o.by === "admin" ? `<span class="by">Ändrad av admin</span>` : ""}`;
+    if (!o) return `<span class="miss">Missing</span>`;
+    if (o.skip) return `<span class="skip">Not eating</span>`;
+    return `${esc(dishName(day, o.dish))}${o.note ? `<span class="by" style="color:var(--gold)">${esc(o.note)}</span>` : ""}${o.by === "admin" ? `<span class="by">Changed by admin</span>` : ""}`;
   };
   const rows = (kind, label) => {
     const list = d.people.filter(p => p.kind === kind);
     if (!list.length) return "";
     return `<tr class="grp"><td colspan="3">${label}</td></tr>` + list.map(p => `<tr class="row" data-act="editorder" data-id="${p.id}">
-      <td><b style="font-weight:600">${esc(p.name)}</b> <span style="color:var(--faint);font-size:12px">${esc(p.tag || "")}</span>${p.active ? "" : `<span class="by">Inaktiv</span>`}</td>
+      <td><b style="font-weight:600">${esc(p.name)}</b> <span style="color:var(--faint);font-size:12px">${esc(p.tag || "")}</span>${p.active ? "" : `<span class="by">Inactive</span>`}</td>
       <td>${cell(p,"tue")}</td><td>${cell(p,"thu")}</td></tr>`).join("");
   };
-  return `<div class="toolbar"><span style="font-size:14px;color:var(--muted)">Tryck på en rad för att ändra eller lägga in en beställning. Du kan ändra även efter att beställningen har låsts.</span></div>
-    <div class="tablewrap"><table><thead><tr><th style="width:34%">Namn</th><th>Tisdag ${fmtShort(d.tue_date)}</th><th>Torsdag ${fmtShort(d.thu_date)}</th></tr></thead>
-    <tbody>${rows("player","Spelare")}${rows("staff","Ledare")}</tbody></table></div>`;
+  return `<div class="toolbar"><span style="font-size:14px;color:var(--muted)">Tap a row to change or add an order. Players can't change their own order once sent, so changes go through here. This works even after the deadline.</span></div>
+    <div class="tablewrap"><table><thead><tr><th style="width:34%">Name</th><th>Tuesday ${fmtShort(d.tue_date)}</th><th>Thursday ${fmtShort(d.thu_date)}</th></tr></thead>
+    <tbody>${rows("player","Players")}${rows("staff","Staff")}</tbody></table></div>`;
 }
 
 function parseMenu(text){
@@ -705,41 +764,43 @@ function viewMenus(){
   const thu = d.thu;
   return `<div class="two">
     <div class="panel">
-      <h3>Tisdag v.${wk}<span class="n" style="color:var(--muted)">${current.length} rätter</span></h3>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:10px">Kopiera tisdagens rätter från Word-filen och klistra in här, en rätt per rad. Klistrar du in hela veckan plockas tisdagen ut automatiskt. Rader som börjar med “Vegetarisk:” märks som vegetariska.</div>
-      <textarea class="field" id="menutext" placeholder="Raggmunk med stekt fläsk och lingonsylt&#10;Stekt fläsk med löksås och kokt potatis&#10;…">${esc(A.menuText)}</textarea>
-      ${A.menuText.trim() ? `<div class="lbl">Förhandsvisning (${parsed.length})</div><div class="preview">${parsed.map((x,i) => `<div><i>${i+1}</i><span style="flex:1;min-width:0">${esc(x.name)}${chips(x.tags)}</span></div>`).join("")}</div>
-        <div class="toolbar"><span class="sp"></span><button class="btn sm ghost" data-act="menuclear">Rensa</button><button class="btn sm" data-act="menusave" ${parsed.length ? "" : "disabled"}>Publicera tisdagsmenyn</button></div>
-        <div style="font-size:12.5px;color:var(--faint);margin-top:8px">Rätter som tas bort släpper eventuella beställningar på dem. De personerna hamnar då under ”Har inte beställt”.</div>`
-      : `<div class="lbl">Nuvarande meny</div>${current.length ? `<div class="preview">${current.map((x,i) => `<div><i>${i+1}</i><span style="flex:1;min-width:0">${esc(x.name)}${chips(x.tags)}</span></div>`).join("")}</div>
-        <div class="toolbar"><span class="sp"></span><button class="btn sm dark" data-act="menuedit">Redigera</button></div>` : `<div class="empty">Ingen tisdagsmeny för vecka ${wk} än.</div>`}`}
+      <h3>Tuesday wk ${wk}<span class="n" style="color:var(--muted)">${current.length} dishes</span></h3>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:10px">Copy Tuesday's dishes from the Word file and paste them here, one dish per line. If you paste the whole week, Tuesday is picked out automatically. Lines starting with “Vegetarisk:” are marked vegetarian, and “-G” / “-L” at the end of a line become the G and L badges.</div>
+      <textarea class="field" id="menutext" placeholder="Raggmunk med stekt fläsk och lingonsylt&#10;Stekt fläsk med löksås och kokt potatis -G&#10;…">${esc(A.menuText)}</textarea>
+      ${A.menuText.trim() ? `<div class="lbl">Preview (${parsed.length})</div><div class="preview">${parsed.map((x,i) => `<div><i>${i+1}</i><span style="flex:1;min-width:0">${esc(x.name)}${chips(x.tags)}</span></div>`).join("")}</div>
+        <div class="toolbar"><span class="sp"></span><button class="btn sm ghost" data-act="menuclear">Clear</button><button class="btn sm" data-act="menusave" ${parsed.length ? "" : "disabled"}>Publish Tuesday menu</button></div>
+        <div style="font-size:12.5px;color:var(--faint);margin-top:8px">If a dish is removed, any orders for it are released, and those people move back to “Not ordered yet”.</div>`
+      : `<div class="lbl">Current menu</div>${current.length ? `<div class="preview">${current.map((x,i) => `<div><i>${i+1}</i><span style="flex:1;min-width:0">${esc(x.name)}${chips(x.tags)}</span></div>`).join("")}</div>
+        <div class="toolbar"><span class="sp"></span><button class="btn sm dark" data-act="menuedit">Edit</button></div>` : `<div class="empty">No Tuesday menu for week ${wk} yet.</div>`}`}
     </div>
     <div class="panel">
-      <h3>Torsdag · fast meny<span class="n" style="color:var(--muted)">${thu.filter(x => x.active).length} aktiva</span></h3>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:6px">Samma varje vecka. Stäng av en rätt om den inte går att beställa, och märk rätter som kan fås glutenfria (G) eller laktosfria (L).</div>
+      <h3>Thursday · fixed menu<span class="n" style="color:var(--muted)">${thu.filter(x => x.active).length} active</span></h3>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:6px">The same every week. Switch a dish off if it can't be ordered, and mark dishes that are gluten-free (G) or lactose-free (L). Edit a name and tap outside the box to save it.</div>
       ${thu.map(x => `<div class="mrow">
-        <input class="field" id="thu-name-${x.id}" value="${esc(x.name)}" data-thu="${x.id}" aria-label="Rättens namn">
-        <span class="tagset">${["G","L","V","NY"].map(t => `<button class="${(x.tags||[]).includes(t) ? "on" : ""}" data-act="thutag" data-id="${x.id}" data-tag="${t}" title="${TAGS[t]}">${t}</button>`).join("")}</span>
-        <button class="sw ${x.active ? "on" : ""}" data-act="thuactive" data-id="${x.id}" aria-label="Aktiv" aria-pressed="${x.active}"></button>
+        <input class="field" id="thu-name-${x.id}" value="${esc(x.name)}" data-thu="${x.id}" aria-label="Dish name">
+        <span class="tagset">${["G","L","V","NY"].map(t => `<button class="${(x.tags||[]).includes(t) ? "on" : ""}" data-act="thutag" data-id="${x.id}" data-tag="${t}" title="${TAGS[t]}">${t === "NY" ? "NEW" : t}</button>`).join("")}</span>
+        <button class="sw ${x.active ? "on" : ""}" data-act="thuactive" data-id="${x.id}" aria-label="Active" aria-pressed="${x.active}"></button>
       </div>`).join("")}
-      <div class="toolbar"><input class="field" id="thu-new" placeholder="Ny rätt" style="flex:1;min-width:0"><button class="btn sm dark" data-act="thuadd">Lägg till</button></div>
+      <div class="toolbar"><input class="field" id="thu-new" placeholder="New dish" style="flex:1;min-width:0"><button class="btn sm dark" data-act="thuadd">Add</button></div>
     </div></div>`;
 }
 
+/* The email goes to a Swedish caterer, so it stays in Swedish. */
 function buildEmail(){
   const d = A.data, wk = isoWeek(d.week);
   const subject = `Lunchbeställning ${TEAM} v.${wk} – tis ${fmtShort(d.tue_date)} & tor ${fmtShort(d.thu_date)}`;
   const om = aOrders();
+  const tagStr = x => { const t = (x.tags || []).filter(t => DIET.includes(t)); return t.length ? ` (${t.join(", ")})` : ""; };
   const block = (day, label, dateStr) => {
     const C = computeDay(day);
-    let s = `${label.toUpperCase()} ${fmtDay(dateStr)} – ${C.total} portioner\n`;
+    let s = `${label.toUpperCase()} ${fmtDaySv(dateStr)} – ${C.total} portioner\n`;
     d[day].filter(x => x.active).forEach(x => {
       const n = (C.counts.get(x.id) || 0) + (C.extras.get(x.id) || 0);
-      if (n) s += `  ${String(n).padStart(2," ")} × ${x.name}${C.extras.get(x.id) ? ` (varav ${C.extras.get(x.id)} extra)` : ""}\n`;
+      if (n) s += `  ${String(n).padStart(2," ")} × ${x.name}${tagStr(x)}${C.extras.get(x.id) ? ` (varav ${C.extras.get(x.id)} extra)` : ""}\n`;
     });
     if (C.notes.length) {
       s += `\n  Särskilda önskemål:\n`;
-      C.notes.forEach(n => { s += `  – ${n.p.name}: ${dishName(day, n.dish)} – ${n.f.join(", ")}\n`; });
+      C.notes.forEach(n => { s += `  – ${n.p.name}: ${dishName(day, n.dish)} – ${n.note}\n`; });
     }
     const named = d.people.map(p => ({ p, o:(om[p.id] || {})[day] })).filter(x => x.o && !x.o.skip);
     if (named.length) {
@@ -754,87 +815,86 @@ function buildEmail(){
 
 function viewSend(){
   const d = A.data, { subject, body } = buildEmail();
-  const T = computeDay("tue"), H = computeDay("thu");
-  const missing = new Set([...T.missing, ...H.missing].map(p => p.name));
+  const miss = missingBoth();
   const href = `mailto:${encodeURIComponent(A.mailTo.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return `
-    ${!d.locked ? `<div class="callout warn">Beställningen är fortfarande öppen till söndag ${fmtDay(addDays(d.week,-1))} kl 13:00. Siffrorna kan ändras fram till dess.</div>` : ""}
-    ${missing.size ? `<div class="callout warn">${missing.size} ${missing.size === 1 ? "person har" : "personer har"} inte valt för båda dagarna: ${esc([...missing].join(", "))}.</div>` : ""}
-    ${d.sent_at ? `<div class="callout ok">Markerad som skickad ${esc(fmtStamp(d.sent_at))}.</div>` : ""}
+    ${!d.locked ? `<div class="callout warn">Ordering is still open until Sunday ${fmtDay(addDays(d.week,-1))} at 13:00. The numbers can still change.</div>` : ""}
+    ${miss.length ? `<div class="callout warn">${miss.length} ${miss.length === 1 ? "person hasn't" : "people haven't"} picked for both days: ${esc(miss.map(p => p.name).join(", "))}.</div>` : ""}
+    ${d.sent_at ? `<div class="callout ok">Marked as sent ${esc(fmtStamp(d.sent_at))}.</div>` : ""}
     <div class="two">
       <div class="panel">
-        <h3>Mottagare</h3>
-        <input class="field" id="mailto" type="email" placeholder="cateringfirman@exempel.se" value="${esc(A.mailTo)}" autocomplete="email">
-        <div class="toolbar"><button class="btn sm dark" data-act="savemail">Spara adressen</button><span style="font-size:12.5px;color:var(--faint)">Sparas till nästa vecka</span></div>
-        <div class="lbl">Ämne</div>
+        <h3>Recipient</h3>
+        <input class="field" id="mailto" type="email" placeholder="caterer@example.se" value="${esc(A.mailTo)}" autocomplete="email">
+        <div class="toolbar"><button class="btn sm dark" data-act="savemail">Save address</button><span style="font-size:12.5px;color:var(--faint)">Kept for next week</span></div>
+        <div class="lbl">Subject</div>
         <div style="font-size:14px">${esc(subject)}</div>
-        <div class="lbl">Så skickar du</div>
+        <div class="lbl">How to send</div>
         <ol style="margin:0;padding-left:18px;font-size:14px;color:var(--muted);line-height:1.6">
-          <li>Kontrollera siffrorna i förhandsvisningen.</li>
-          <li>Tryck <b style="color:var(--text)">Öppna i Mail</b>. Mejlet är ifyllt, du trycker bara skicka.</li>
-          <li>Tryck <b style="color:var(--text)">Markera som skickad</b> här.</li>
+          <li>Check the numbers in the preview. The email is in Swedish for the caterer.</li>
+          <li>Tap <b style="color:var(--text)">Open in Mail</b>. Everything is filled in, you just press send.</li>
+          <li>Tap <b style="color:var(--text)">Mark as sent</b> here.</li>
         </ol>
         <div class="toolbar">
-          <a class="btn" href="${href}" ${A.mailTo.trim() ? "" : `aria-disabled="true" style="opacity:.35;pointer-events:none"`} data-act="openmail">Öppna i Mail</a>
-          <button class="btn sm dark" data-act="copymail">Kopiera text</button>
-          <button class="btn sm ghost" data-act="marksent">Markera som skickad</button>
+          <a class="btn" href="${href}" ${A.mailTo.trim() ? "" : `aria-disabled="true" style="opacity:.35;pointer-events:none"`} data-act="openmail">Open in Mail</a>
+          <button class="btn sm dark" data-act="copymail">Copy text</button>
+          <button class="btn sm ghost" data-act="marksent">Mark as sent</button>
         </div>
-        ${A.mailTo.trim() ? "" : `<div style="font-size:12.5px;color:var(--faint);margin-top:8px">Fyll i cateringfirmans adress först.</div>`}
+        ${A.mailTo.trim() ? "" : `<div style="font-size:12.5px;color:var(--faint);margin-top:8px">Fill in the caterer's address first.</div>`}
       </div>
-      <div class="panel"><h3>Förhandsvisning</h3><div class="mail">${esc(body)}</div></div>
+      <div class="panel"><h3>Preview</h3><div class="mail">${esc(body)}</div></div>
     </div>`;
 }
 
 function viewSettings(){
   const ap = A.data.all_people;
   const row = p => `<div class="prow">
-    <input class="field" id="pt-${p.id}" value="${esc(p.tag || "")}" placeholder="Nr" aria-label="Nummer eller initialer">
-    <input class="field" id="pn-${p.id}" value="${esc(p.name)}" aria-label="Namn">
-    <select class="field kind" id="pk-${p.id}" aria-label="Typ"><option value="player" ${p.kind === "player" ? "selected" : ""}>Spelare</option><option value="staff" ${p.kind === "staff" ? "selected" : ""}>Ledare</option></select>
-    <button class="sw ${p.active ? "on" : ""}" data-act="pactive" data-id="${p.id}" aria-label="Aktiv" aria-pressed="${p.active}" title="${p.active ? "Aktiv" : "Inaktiv"}"></button>
-    <button class="btn sm dark" data-act="psave" data-id="${p.id}">Spara</button></div>`;
+    <input class="field" id="pt-${p.id}" value="${esc(p.tag || "")}" placeholder="No." aria-label="Number or initials">
+    <input class="field" id="pn-${p.id}" value="${esc(p.name)}" aria-label="Name">
+    <select class="field kind" id="pk-${p.id}" aria-label="Type"><option value="player" ${p.kind === "player" ? "selected" : ""}>Player</option><option value="staff" ${p.kind === "staff" ? "selected" : ""}>Staff</option></select>
+    <button class="sw ${p.active ? "on" : ""}" data-act="pactive" data-id="${p.id}" aria-label="Active" aria-pressed="${p.active}" title="${p.active ? "Active" : "Inactive"}"></button>
+    <button class="btn sm dark" data-act="psave" data-id="${p.id}">Save</button></div>`;
   return `<div class="two">
     <div class="panel" style="grid-column:1/-1">
-      <h3>Spelare och ledare<span class="n" style="color:var(--muted)">${ap.filter(p => p.active).length} aktiva</span></h3>
-      <div style="font-size:14px;color:var(--muted);margin-bottom:6px">Stäng av en person som slutat eller är skadad länge. Hen försvinner då från listan men gamla beställningar finns kvar.</div>
+      <h3>Players and staff<span class="n" style="color:var(--muted)">${ap.filter(p => p.active).length} active</span></h3>
+      <div style="font-size:14px;color:var(--muted);margin-bottom:6px">Switch someone off if they've left or are out long-term. They disappear from the list, but their old orders are kept.</div>
       ${ap.map(row).join("")}
-      <div class="lbl">Lägg till</div>
+      <div class="lbl">Add someone</div>
       <div class="prow" style="border-top:0">
-        <input class="field" id="pt-new" placeholder="Nr"><input class="field" id="pn-new" placeholder="För- och efternamn">
-        <select class="field kind" id="pk-new"><option value="player">Spelare</option><option value="staff">Ledare</option></select>
-        <span></span><button class="btn sm" data-act="padd">Lägg till</button></div>
+        <input class="field" id="pt-new" placeholder="No."><input class="field" id="pn-new" placeholder="First and last name">
+        <select class="field kind" id="pk-new"><option value="player">Player</option><option value="staff">Staff</option></select>
+        <span></span><button class="btn sm" data-act="padd">Add</button></div>
     </div>
     <div class="panel">
-      <h3>Byt lösenord</h3>
+      <h3>Change password</h3>
       <form id="pwf" style="display:flex;flex-direction:column;gap:8px">
-        <input class="field" id="pw1" type="password" placeholder="Nytt lösenord (minst 8 tecken)" autocomplete="new-password" minlength="8" required>
-        <input class="field" id="pw2" type="password" placeholder="Upprepa" autocomplete="new-password" minlength="8" required>
-        <button class="btn sm" type="submit">Spara lösenord</button>
+        <input class="field" id="pw1" type="password" placeholder="New password (at least 8 characters)" autocomplete="new-password" minlength="8" required>
+        <input class="field" id="pw2" type="password" placeholder="Repeat" autocomplete="new-password" minlength="8" required>
+        <button class="btn sm" type="submit">Save password</button>
       </form>
     </div>
     <div class="panel">
-      <h3>Spelarlänk</h3>
-      <div style="font-size:14px;color:var(--muted)">Dela den här länken i lagets WhatsApp-grupp. Spelarna kan spara den på hemskärmen.</div>
-      <div class="toolbar"><input class="field" readonly value="${esc(location.origin + location.pathname)}" id="plink" style="flex:1;min-width:0"><button class="btn sm dark" data-act="copylink">Kopiera</button></div>
+      <h3>Player link</h3>
+      <div style="font-size:14px;color:var(--muted)">Share this link in the team WhatsApp group. Players can save it to their home screen.</div>
+      <div class="toolbar"><input class="field" readonly value="${esc(location.origin + location.pathname)}" id="plink" style="flex:1;min-width:0"><button class="btn sm dark" data-act="copylink">Copy</button></div>
     </div></div>`;
 }
 
 function viewModal(){
   const m = A.modal, p = A.data.all_people.find(x => x.id === m.id) || A.data.people.find(x => x.id === m.id);
   const tue = A.data.tue.filter(x => x.active || x.id === m.draft.tue.dish), thu = A.data.thu.filter(x => x.active || x.id === m.draft.thu.dish);
-  return `<div class="scrim" data-act="closemodal"><div class="sheet" role="dialog" aria-modal="true" aria-label="Ändra beställning">
+  return `<div class="scrim" data-act="closemodal"><div class="sheet" role="dialog" aria-modal="true" aria-label="Edit order">
     <div class="hd"><span class="num ${p.kind === "staff" ? "staff" : ""}">${esc(p.tag || "")}</span><h2>${esc(p.name)}</h2>
-      <button class="iconbtn" data-act="closemodal" aria-label="Stäng">✕</button></div>
-    ${daySection("tue","Tisdag",A.data.tue_date,tue,m.draft.tue,"a")}
-    ${daySection("thu","Torsdag",A.data.thu_date,thu,m.draft.thu,"a")}
-    <div class="ft"><button class="btn sm ghost" data-act="clearorder">Rensa båda</button><span style="flex:1"></span>
-      <button class="btn sm ghost" data-act="closemodal">Avbryt</button><button class="btn sm" data-act="saveorder" ${A.busy ? "disabled" : ""}>Spara</button></div>
+      <button class="iconbtn" data-act="closemodal" aria-label="Close">✕</button></div>
+    ${daySection("tue","Tuesday",A.data.tue_date,tue,m.draft.tue,"a")}
+    ${daySection("thu","Thursday",A.data.thu_date,thu,m.draft.thu,"a")}
+    <div class="ft"><button class="btn sm ghost" data-act="clearorder">Clear both</button><span style="flex:1"></span>
+      <button class="btn sm ghost" data-act="closemodal">Cancel</button><button class="btn sm" data-act="saveorder" ${A.busy ? "disabled" : ""}>Save</button></div>
   </div></div>`;
 }
 
 async function adminRefresh(week){
   try { await adminLoad(week ?? A.week); renderAdmin(); }
-  catch (e) { if (/lösenord/i.test(e.message)) { A.pw = null; store.sdel("aik_admin"); renderLogin(); } toast(e.message, true); }
+  catch (e) { if (/password/i.test(e.message)) { A.pw = null; store.sdel("aik_admin"); renderLogin(); } toast(e.message, true); }
 }
 async function adminCall(fn, args, okMsg){
   try { await rpc(fn, { p_pw: A.pw, ...args }); if (okMsg) toast(okMsg); await adminRefresh(); return true; }
@@ -844,7 +904,7 @@ async function copy(text, okMsg){
   try { await navigator.clipboard.writeText(text); toast(okMsg); }
   catch (e) {
     const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
-    try { document.execCommand("copy"); toast(okMsg); } catch (_) { toast("Kunde inte kopiera. Markera texten manuellt.", true); }
+    try { document.execCommand("copy"); toast(okMsg); } catch (_) { toast("Couldn't copy. Select the text by hand.", true); }
     ta.remove();
   }
 }
@@ -852,7 +912,7 @@ async function copy(text, okMsg){
 /* ---------- events ---------- */
 function draftFor(scope){ return scope === "a" ? A.modal.draft : P.draft; }
 function rerender(scope){ scope === "a" ? renderAdmin() : renderPlayer(); }
-function keepNote(scope){ // preserve typed note text before re-render
+function keepNote(scope){
   ["tue","thu"].forEach(k => { const el = document.getElementById(`note-${scope}-${k}`); if (el) draftFor(scope)[k].note = el.value; });
 }
 
@@ -861,44 +921,41 @@ document.addEventListener("click", async (ev) => {
   const act = el.dataset.act, scope = el.dataset.scope, day = el.dataset.day;
   if (act === "closemodal" && el.classList.contains("scrim") && ev.target !== el) return;
 
-  if (act === "pick" || act === "skip" || act === "flag") {
+  if (act === "pick" || act === "skip") {
+    if (scope === "p" && P.locked[day]) return;
     keepNote(scope);
     const dr = draftFor(scope)[day];
     if (act === "pick") { dr.dish = Number(el.dataset.id); dr.skip = false; }
-    if (act === "skip") { dr.skip = !dr.skip; if (dr.skip) { dr.dish = null; dr.gluten = dr.lactose = false; dr.note = ""; } }
-    if (act === "flag") dr[el.dataset.flag] = !dr[el.dataset.flag];
+    if (act === "skip") { dr.skip = !dr.skip; if (dr.skip) { dr.dish = null; dr.note = ""; } }
+    if (scope === "p") P.confirm = false;
     const y = window.scrollY; rerender(scope);
     if (scope === "p") window.scrollTo({ top: y });
     return;
   }
   // player
   if (act === "person") return openPerson(Number(el.dataset.id));
-  if (act === "back") { P.view = "names"; P.person = null; renderPlayer(); try { await playerLoad(); renderPlayer(); } catch(e){} window.scrollTo({top:0}); return; }
-  if (act === "edit") { P.view = "order"; renderPlayer(); return; }
+  if (act === "back") { P.view = "names"; P.person = null; P.confirm = false; renderPlayer(); try { await playerLoad(); renderPlayer(); } catch(e){} window.scrollTo({top:0}); return; }
+  if (act === "review") { keepNote("p"); P.confirm = true; renderPlayer(); return; }
+  if (act === "unconfirm") { P.confirm = false; renderPlayer(); return; }
   if (act === "submit") { keepNote("p"); return submitPlayer(); }
 
   // admin
   if (act === "logout") { A.pw = null; A.data = null; store.sdel("aik_admin"); renderLogin(); return; }
   if (act === "tab") { A.tab = el.dataset.tab; renderAdmin(); return; }
   if (act === "wk") { const w = addDays(A.week, Number(el.dataset.d)); A.menuText = ""; await adminRefresh(w); return; }
-  if (act === "reload") { await adminRefresh(); toast("Uppdaterad"); return; }
+  if (act === "reload") { await adminRefresh(); toast("Updated"); return; }
   if (act === "extra") {
-    const cur = (A.data.extras || []).find(e => e.day === day && e.dish === Number(el.dataset.id));
+    const id = Number(el.dataset.id);
+    const cur = (A.data.extras || []).find(e => e.day === day && e.dish === id);
     const q = Math.max(0, (cur ? cur.qty : 0) + Number(el.dataset.d));
-    // optimistic
-    A.data.extras = (A.data.extras || []).filter(e => !(e.day === day && e.dish === Number(el.dataset.id)));
-    if (q > 0) A.data.extras.push({ day, dish:Number(el.dataset.id), qty:q });
+    A.data.extras = (A.data.extras || []).filter(e => !(e.day === day && e.dish === id));
+    if (q > 0) A.data.extras.push({ day, dish:id, qty:q });
     renderAdmin();
-    try { await rpc("admin_set_extra", { p_pw:A.pw, p_week:A.week, p_day:day, p_dish:Number(el.dataset.id), p_qty:q }); }
+    try { await rpc("admin_set_extra", { p_pw:A.pw, p_week:A.week, p_day:day, p_dish:id, p_qty:q }); }
     catch (e) { toast(e.message, true); adminRefresh(); }
     return;
   }
-  if (act === "copyremind") {
-    const om = aOrders(); const wk = isoWeek(A.data.week);
-    const miss = A.data.people.filter(p => p.active).filter(p => { const o = om[p.id] || {}; return !o.tue || !o.thu; });
-    const txt = `Lunch v.${wk} – glöm inte att välja innan söndag kl 13:00! 🍽️\nSaknas: ${miss.map(p => p.name.split(" ")[0] + " " + (p.name.split(" ")[1]||"").charAt(0) + ".").join(", ")}\n${location.origin + location.pathname}`;
-    return copy(txt, "Påminnelsen är kopierad");
-  }
+  if (act === "copyremind") return copy(reminderText(), "Reminder copied. Paste it in the team chat.");
   if (act === "editorder") {
     const id = Number(el.dataset.id), om = aOrders()[id] || {};
     A.modal = { id, draft:{ tue:fromServer(om.tue), thu:fromServer(om.thu) } }; renderAdmin(); return;
@@ -911,15 +968,15 @@ document.addEventListener("click", async (ev) => {
     try {
       await rpc("admin_set_order", { p_pw:A.pw, p_week:A.week, p_person:m.id, p_day:"tue", p_order:toPayload(m.draft.tue) });
       await rpc("admin_set_order", { p_pw:A.pw, p_week:A.week, p_person:m.id, p_day:"thu", p_order:toPayload(m.draft.thu) });
-      A.modal = null; toast("Beställningen är sparad");
+      A.modal = null; toast("Order saved");
     } catch (e) { toast(e.message, true); }
     A.busy = false; await adminRefresh(); return;
   }
-  if (act === "menuedit") { A.menuText = A.data.tue.filter(x => x.active).map(x => (x.tags.includes("V") ? "Vegetarisk: " : "") + x.name).join("\n"); renderAdmin(); return; }
+  if (act === "menuedit") { A.menuText = A.data.tue.filter(x => x.active).map(x => (x.tags.includes("V") ? "Vegetarisk: " : "") + x.name + x.tags.filter(t => DIET.includes(t)).map(t => " -" + t).join("")).join("\n"); renderAdmin(); return; }
   if (act === "menuclear") { A.menuText = ""; renderAdmin(); return; }
   if (act === "menusave") {
     const items = parseMenu(document.getElementById("menutext").value);
-    if (await adminCall("admin_set_tuesday", { p_week:A.week, p_items:items }, "Tisdagsmenyn är publicerad")) { A.menuText = ""; renderAdmin(); }
+    if (await adminCall("admin_set_tuesday", { p_week:A.week, p_items:items }, "Tuesday menu published")) { A.menuText = ""; renderAdmin(); }
     return;
   }
   if (act === "thutag" || act === "thuactive") {
@@ -927,30 +984,30 @@ document.addEventListener("click", async (ev) => {
     const name = document.getElementById(`thu-name-${x.id}`)?.value || x.name;
     const tags = act === "thutag" ? (x.tags.includes(el.dataset.tag) ? x.tags.filter(t => t !== el.dataset.tag) : [...x.tags, el.dataset.tag]) : x.tags;
     const active = act === "thuactive" ? !x.active : x.active;
-    await adminCall("admin_dish", { p_id:x.id, p_name:name, p_tags:tags, p_active:active }, "Sparat");
+    await adminCall("admin_dish", { p_id:x.id, p_name:name, p_tags:tags, p_active:active }, "Saved");
     return;
   }
   if (act === "thuadd") {
-    const v = document.getElementById("thu-new").value.trim(); if (!v) return toast("Skriv rättens namn först.", true);
-    await adminCall("admin_dish", { p_id:null, p_name:v, p_tags:[], p_active:true }, "Rätten är tillagd"); return;
+    const v = document.getElementById("thu-new").value.trim(); if (!v) return toast("Type the dish name first.", true);
+    await adminCall("admin_dish", { p_id:null, p_name:v, p_tags:[], p_active:true }, "Dish added"); return;
   }
-  if (act === "savemail") { A.mailTo = document.getElementById("mailto").value.trim(); await adminCall("admin_settings", { p_email:A.mailTo, p_new_pw:null }, "Adressen är sparad"); return; }
-  if (act === "copymail") { const { subject, body } = buildEmail(); return copy(`Ämne: ${subject}\n\n${body}`, "Mejltexten är kopierad"); }
-  if (act === "marksent") { await adminCall("admin_mark_sent", { p_week:A.week }, "Markerad som skickad"); return; }
-  if (act === "openmail") { setTimeout(() => toast("Tryck på Markera som skickad när mejlet har gått iväg."), 600); return; }
+  if (act === "savemail") { A.mailTo = document.getElementById("mailto").value.trim(); await adminCall("admin_settings", { p_email:A.mailTo, p_new_pw:null }, "Address saved"); return; }
+  if (act === "copymail") { const { subject, body } = buildEmail(); return copy(`Ämne: ${subject}\n\n${body}`, "Email text copied"); }
+  if (act === "marksent") { await adminCall("admin_mark_sent", { p_week:A.week }, "Marked as sent"); return; }
+  if (act === "openmail") { setTimeout(() => toast("Tap Mark as sent once the email has gone."), 600); return; }
   if (act === "psave" || act === "pactive") {
     const id = Number(el.dataset.id), p = A.data.all_people.find(x => x.id === id);
     const name = document.getElementById(`pn-${id}`).value, tag = document.getElementById(`pt-${id}`).value, kind = document.getElementById(`pk-${id}`).value;
-    await adminCall("admin_person", { p_id:id, p_name:name, p_kind:kind, p_tag:tag, p_active: act === "pactive" ? !p.active : p.active }, "Sparat");
+    await adminCall("admin_person", { p_id:id, p_name:name, p_kind:kind, p_tag:tag, p_active: act === "pactive" ? !p.active : p.active }, "Saved");
     return;
   }
   if (act === "padd") {
     const name = document.getElementById("pn-new").value, tag = document.getElementById("pt-new").value, kind = document.getElementById("pk-new").value;
-    if (!name.trim()) return toast("Skriv ett namn först.", true);
-    await adminCall("admin_person", { p_id:null, p_name:name, p_kind:kind, p_tag:tag, p_active:true }, `${name.trim()} är tillagd`);
+    if (!name.trim()) return toast("Type a name first.", true);
+    await adminCall("admin_person", { p_id:null, p_name:name, p_kind:kind, p_tag:tag, p_active:true }, `${name.trim()} added`);
     return;
   }
-  if (act === "copylink") return copy(document.getElementById("plink").value, "Länken är kopierad");
+  if (act === "copylink") return copy(document.getElementById("plink").value, "Link copied");
 });
 
 document.addEventListener("input", (ev) => {
@@ -964,9 +1021,8 @@ document.addEventListener("change", async (ev) => {
   if (ev.target.id === "mailto") { A.mailTo = ev.target.value; renderAdmin(); return; }
   const tid = ev.target.dataset && ev.target.dataset.thu;
   if (tid) { const x = A.data.thu.find(d => d.id === Number(tid)); const v = ev.target.value.trim();
-    if (x && v && v !== x.name) await adminCall("admin_dish", { p_id:x.id, p_name:v, p_tags:x.tags, p_active:x.active }, "Namnet är sparat"); }
+    if (x && v && v !== x.name) await adminCall("admin_dish", { p_id:x.id, p_name:v, p_tags:x.tags, p_active:x.active }, "Name saved"); }
 });
-
 document.addEventListener("submit", async (ev) => {
   if (ev.target.id === "loginf") {
     ev.preventDefault();
@@ -977,8 +1033,8 @@ document.addEventListener("submit", async (ev) => {
   if (ev.target.id === "pwf") {
     ev.preventDefault();
     const a = document.getElementById("pw1").value, b = document.getElementById("pw2").value;
-    if (a !== b) return toast("Lösenorden matchar inte.", true);
-    if (await adminCall("admin_settings", { p_email:null, p_new_pw:a }, "Lösenordet är bytt")) { A.pw = a; store.sset("aik_admin", a); }
+    if (a !== b) return toast("The passwords don't match.", true);
+    if (await adminCall("admin_settings", { p_email:null, p_new_pw:a }, "Password changed")) { A.pw = a; store.sset("aik_admin", a); }
   }
 });
 document.addEventListener("keydown", (ev) => { if (ev.key === "Escape" && A.modal) { A.modal = null; renderAdmin(); } });
@@ -990,13 +1046,13 @@ async function route(){
   if (location.hash === "#admin") {
     A.pw = A.pw || store.sget("aik_admin");
     if (!A.pw) return renderLogin();
-    $app.innerHTML = `<div class="loading"><div class="spin"></div><div>Laddar…</div></div>`;
+    $app.innerHTML = `<div class="loading"><div class="spin"></div><div>Loading…</div></div>`;
     await adminRefresh(null);
     pollTimer = setInterval(() => { if (document.visibilityState === "visible" && !A.modal && A.tab === "overview" && location.hash === "#admin") adminRefresh(); }, 45000);
     return;
   }
   try { await playerLoad(); P.view = "names"; renderPlayer(); }
-  catch (e) { $app.innerHTML = `<div class="wrap">${topbar("Lunchbeställning")}<div class="closed-note">${esc(e.message)}</div><div class="toolbar"><button class="btn" onclick="location.reload()">Försök igen</button></div></div>`; return; }
+  catch (e) { $app.innerHTML = `<div class="wrap">${topbar("Lunch orders")}<div class="closed-note">${esc(e.message)}</div><div class="toolbar"><button class="btn" onclick="location.reload()">Try again</button></div></div>`; return; }
   cdTimer = setInterval(() => {
     const el = document.querySelector("[data-cd]"); if (!el || !P.state) return;
     const ms = new Date(P.state.deadline).getTime() - nowServer();
