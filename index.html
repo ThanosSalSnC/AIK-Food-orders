@@ -150,6 +150,12 @@ button{cursor:pointer}
   background:rgba(255,255,255,.06);color:var(--muted);border:1px solid var(--line)}
 .chip.V{color:#7FE0A7;border-color:rgba(127,224,167,.25)}
 .chip.NY{color:var(--gold);border-color:rgba(247,198,0,.3)}
+.diets{display:inline-flex;gap:4px;margin-left:8px;vertical-align:1px}
+.diet{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;font-family:var(--display);font-weight:800;font-size:12px;line-height:1;letter-spacing:0;flex:none}
+.diet.G{background:#F2B33D;color:#2A1A00}
+.diet.L{background:#6FB7FF;color:#04213F}
+.legend{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin:-2px 0 10px}
+.legend .diet:not(:first-child){margin-left:8px}
 .opt.skip .t{color:var(--muted)}
 .opt.skip.on{border-color:var(--line-2);background:var(--surface-2)}
 .opt.skip.on .rd{background:var(--muted);border-color:var(--muted)}
@@ -376,8 +382,15 @@ function countdown(ms){
   if (h > 0) return `${h} h ${mm} min`;
   return `${mm} min`;
 }
-const TAGS = { G:"Kan fås glutenfri", L:"Kan fås laktosfri", V:"Vegetarisk", NY:"Nyhet" };
-const chips = tags => (tags && tags.length) ? `<div class="chips">${tags.map(t => `<span class="chip ${esc(t)}">${esc(TAGS[t] || t)}</span>`).join("")}</div>` : "";
+const TAGS = { G:"Glutenfri", L:"Laktosfri", V:"Vegetarisk", NY:"Nyhet" };
+const DIET = ["G","L"];
+const chips = tags => {
+  tags = tags || [];
+  const diet = DIET.filter(t => tags.includes(t)).map(t => `<span class="diet ${t}" title="${TAGS[t]}" aria-label="${TAGS[t]}">${t}</span>`).join("");
+  const rest = tags.filter(t => !DIET.includes(t));
+  return (diet ? `<span class="diets">${diet}</span>` : "") + (rest.length ? `<div class="chips">${rest.map(t => `<span class="chip ${esc(t)}">${esc(TAGS[t] || t)}</span>`).join("")}</div>` : "");
+};
+const legend = `<div class="legend"><span class="diet G">G</span> Glutenfri <span class="diet L">L</span> Laktosfri</div>`;
 const ICON = {
   check:'<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
   bigcheck:'<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
@@ -397,7 +410,7 @@ const topbar = (sub, right = "") => `
 function blankDay(){ return { dish:null, skip:false, gluten:false, lactose:false, note:"" }; }
 function fromServer(o){ return o ? { dish:o.dish ?? null, skip:!!o.skip, gluten:!!o.gluten, lactose:!!o.lactose, note:o.note || "" } : blankDay(); }
 function dayChosen(d){ return !!(d && (d.dish || d.skip)); }
-function toPayload(d){ return dayChosen(d) ? { dish:d.skip ? null : d.dish, skip:d.skip, gluten:d.gluten, lactose:d.lactose, note:d.note } : null; }
+function toPayload(d){ return dayChosen(d) ? { dish:d.skip ? null : d.dish, skip:d.skip, gluten:false, lactose:false, note:d.note } : null; }
 
 function daySection(key, label, dateStr, dishes, d, scope){
   const chosen = dayChosen(d);
@@ -413,20 +426,13 @@ function daySection(key, label, dateStr, dishes, d, scope){
       `<button type="button" class="opt skip ${d.skip ? "on" : ""}" role="radio" aria-checked="${d.skip}" data-act="skip" data-scope="${scope}" data-day="${key}">
           <span class="rd"></span><span class="t">Äter inte denna dag</span></button></div>`;
     if (d.dish && !d.skip) {
-      const glutenWarn = d.gluten && sel && key === "thu" && !(sel.tags || []).includes("G");
-      const lacWarn = d.lactose && sel && key === "thu" && !(sel.tags || []).includes("L");
       body += `<div class="extras">
-        <div class="toggles">
-          <button type="button" class="tg ${d.gluten ? "on" : ""}" data-act="flag" data-flag="gluten" data-scope="${scope}" data-day="${key}" aria-pressed="${d.gluten}">Glutenfri</button>
-          <button type="button" class="tg ${d.lactose ? "on" : ""}" data-act="flag" data-flag="lactose" data-scope="${scope}" data-day="${key}" aria-pressed="${d.lactose}">Laktosfri</button>
-        </div>
-        ${glutenWarn || lacWarn ? `<div class="warn">Rätten är inte markerad som ${glutenWarn ? "glutenfri" : "laktosfri"} hos cateringen. Välj gärna en rätt med den märkningen.</div>` : ""}
         <input class="field" id="note-${scope}-${key}" maxlength="120" placeholder="Utan… (t.ex. ej sås, ingen lök)" value="${esc(d.note)}" data-act="note" data-scope="${scope}" data-day="${key}" autocomplete="off">
       </div>`;
     }
   }
   return `<div class="dayhead"><span class="tag">${label.slice(0,3)}</span><h2>${esc(label)} ${fmtDay(dateStr)}</h2>
-      <span class="st ${chosen ? "ok" : ""}">${chosen ? "Vald ✓" : "Ej vald"}</span></div>${body}`;
+      <span class="st ${chosen ? "ok" : ""}">${chosen ? "Vald ✓" : "Ej vald"}</span></div>${dishes.some(x => (x.tags || []).some(t => DIET.includes(t))) ? legend : ""}${body}`;
 }
 
 /* ---------- PLAYER ---------- */
@@ -686,6 +692,8 @@ function parseMenu(text){
     .map(l => l.replace(/^\s*(?:[-–•*·]|\d+[.)])\s*/, "").replace(/\s+/g, " ").trim())
     .filter(l => l && !/^(måndag|tisdag|onsdag|torsdag|fredag)\s*:?$/i.test(l))
     .map(l => { const tags = []; const v = l.match(/^vegetarisk\s*:\s*/i); if (v) { tags.push("V"); l = l.slice(v[0].length); }
+      let mk; l = l.replace(/[\s:;,/]+$/, "");
+      while ((mk = l.match(/\s*[-–(]\s*([GL])\s*\)?$/))) { if (!tags.includes(mk[1])) tags.unshift(mk[1]); l = l.slice(0, mk.index).replace(/[\s:;,/]+$/, ""); }
       return { name: l.charAt(0).toUpperCase() + l.slice(1), tags }; })
     .slice(0, 30);
 }
