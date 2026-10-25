@@ -500,7 +500,7 @@ function renderPlayer(){
           <div class="day"><small>Thursday</small><strong>${fmtDay(s.thu_date)}</strong></div>
         </div>
         <div class="deadline"><span class="pulse ${open ? "" : "closed"}"></span>
-          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · Sun ${fmtDay(addDays(s.week,-1))} at 13:00` : `<b>Ordering has closed.</b>`}</div>
+          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · Sun ${fmtDay(addDays(s.week,-1))} at 19:00` : `<b>Ordering has closed.</b>`}</div>
         <div class="meter"><i style="width:${total ? Math.round(done/total*100) : 0}%"></i></div>
         <div class="meter-l">${done} of ${total} have ordered</div>
       </section>
@@ -575,7 +575,7 @@ function renderPlayer(){
           <div><small>Tuesday ${fmtDay(s.tue_date)}</small>${esc(dayChosen(dr.tue) ? choiceText(dr.tue, s.tue) : "Nothing chosen yet")}${dr.tue.note ? ` · <span style="color:var(--gold)">${esc(dr.tue.note)}</span>` : ""}</div>
           <div><small>Thursday ${fmtDay(s.thu_date)}</small>${esc(dayChosen(dr.thu) ? choiceText(dr.thu, s.thu) : "Nothing chosen yet")}${dr.thu.note ? ` · <span style="color:var(--gold)">${esc(dr.thu.note)}</span>` : ""}</div>
         </div>
-        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">You haven't picked anything for ${missing}. Come back and choose before Sunday at 13:00.</div>` : ""}
+        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">You haven't picked anything for ${missing}. Come back and choose before Sunday at 19:00.</div>` : ""}
         <div class="callout lockmsg">${ICON.lock}<span>Need to change something? Message <b>${CONTACT}</b>.</span></div>
         <div style="margin-top:16px"><button type="button" class="btn" data-act="back">Done</button></div>
       </div></div>`;
@@ -642,13 +642,13 @@ function missingBoth(){ const om = aOrders(); return A.data.people.filter(p => p
 function reminderText(){
   const wk = isoWeek(A.data.week);
   const names = missingBoth().map(p => { const [f, l] = p.name.split(" "); return f + (l ? " " + l.charAt(0) + "." : ""); });
-  return `🍽️ Lunch week ${wk}: please order before Sunday at 13:00!\nStill missing: ${names.join(", ")}\n👉 ${location.origin + location.pathname}`;
+  return `🍽️ Lunch week ${wk}: please order before Sunday at 19:00!\nStill missing: ${names.join(", ")}\n👉 ${location.origin + location.pathname}`;
 }
 function statusPill(){
   const d = A.data;
   if (d.sent_at) return `<span class="pill sent">Sent ${esc(fmtStamp(d.sent_at))}</span>`;
   if (d.locked) return `<span class="pill locked">Locked · ready to send</span>`;
-  return `<span class="pill open">Open · closes Sun 13:00</span>`;
+  return `<span class="pill open">Open · closes Sun 19:00</span>`;
 }
 
 function renderAdmin(){
@@ -818,7 +818,7 @@ function viewSend(){
   const miss = missingBoth();
   const href = `mailto:${encodeURIComponent(A.mailTo.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return `
-    ${!d.locked ? `<div class="callout warn">Ordering is still open until Sunday ${fmtDay(addDays(d.week,-1))} at 13:00. The numbers can still change.</div>` : ""}
+    ${!d.locked ? `<div class="callout warn">Ordering is still open until Sunday ${fmtDay(addDays(d.week,-1))} at 19:00. The numbers can still change.</div>` : ""}
     ${miss.length ? `<div class="callout warn">${miss.length} ${miss.length === 1 ? "person hasn't" : "people haven't"} picked for both days: ${esc(miss.map(p => p.name).join(", "))}.</div>` : ""}
     ${d.sent_at ? `<div class="callout ok">Marked as sent ${esc(fmtStamp(d.sent_at))}.</div>` : ""}
     <div class="two">
