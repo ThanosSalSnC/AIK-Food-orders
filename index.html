@@ -310,6 +310,13 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 .callout.lockmsg svg{flex:none;margin-top:3px}
 .dayhead .st svg{vertical-align:-2px}
 .bar .in.confirm{border-color:rgba(247,198,0,.45)}
+.dlbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:12px 14px;border-radius:14px;background:var(--ok-soft);border:1px solid rgba(53,212,138,.28)}
+.dlbar.closed{background:var(--surface);border-color:var(--line-2)}
+.dlbar .t{flex:1;min-width:220px;display:flex;flex-direction:column;gap:2px}
+.dlbar small{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.dlbar b{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.02em}
+.dlbar .ext{font-size:12.5px;color:var(--gold);font-weight:600}
+.dlbar .hint{font-size:13px;color:var(--muted)}
 @media (min-width:760px){
   .scrim{align-items:center}
   .sheet{border-radius:22px;border-bottom:1px solid var(--line-2)}
@@ -390,6 +397,11 @@ function isoWeek(s){
   return 1 + Math.round(((d - fy) / 864e5 - 3 + ((fy.getUTCDay() + 6) % 7)) / 7);
 }
 function addDays(s, n){ const d = pd(s); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function fmtDeadline(ts){
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Stockholm",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit",hour12:false})
+    .formatToParts(new Date(ts)).map(x => [x.type, x.value]));
+  return `${parts.weekday} ${parts.day} ${parts.month} at ${parts.hour}:${parts.minute}`;
+}
 function fmtStamp(ts){
   return new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Stockholm",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(ts));
 }
@@ -500,7 +512,7 @@ function renderPlayer(){
           <div class="day"><small>Thursday</small><strong>${fmtDay(s.thu_date)}</strong></div>
         </div>
         <div class="deadline"><span class="pulse ${open ? "" : "closed"}"></span>
-          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · Sun ${fmtDay(addDays(s.week,-1))} at 19:00` : `<b>Ordering has closed.</b>`}</div>
+          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · ${fmtDeadline(s.deadline)}` : `<b>Ordering has closed.</b>`}</div>
         <div class="meter"><i style="width:${total ? Math.round(done/total*100) : 0}%"></i></div>
         <div class="meter-l">${done} of ${total} have ordered</div>
       </section>
@@ -575,7 +587,7 @@ function renderPlayer(){
           <div><small>Tuesday ${fmtDay(s.tue_date)}</small>${esc(dayChosen(dr.tue) ? choiceText(dr.tue, s.tue) : "Nothing chosen yet")}${dr.tue.note ? ` · <span style="color:var(--gold)">${esc(dr.tue.note)}</span>` : ""}</div>
           <div><small>Thursday ${fmtDay(s.thu_date)}</small>${esc(dayChosen(dr.thu) ? choiceText(dr.thu, s.thu) : "Nothing chosen yet")}${dr.thu.note ? ` · <span style="color:var(--gold)">${esc(dr.thu.note)}</span>` : ""}</div>
         </div>
-        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">You haven't picked anything for ${missing}. Come back and choose before Sunday at 19:00.</div>` : ""}
+        ${missing ? `<div class="callout warn" style="margin:0 0 16px;text-align:left">You haven't picked anything for ${missing}. Come back and choose before ${fmtDeadline(s.deadline)}.</div>` : ""}
         <div class="callout lockmsg">${ICON.lock}<span>Need to change something? Message <b>${CONTACT}</b>.</span></div>
         <div style="margin-top:16px"><button type="button" class="btn" data-act="back">Done</button></div>
       </div></div>`;
@@ -642,13 +654,13 @@ function missingBoth(){ const om = aOrders(); return A.data.people.filter(p => p
 function reminderText(){
   const wk = isoWeek(A.data.week);
   const names = missingBoth().map(p => { const [f, l] = p.name.split(" "); return f + (l ? " " + l.charAt(0) + "." : ""); });
-  return `🍽️ Lunch week ${wk}: please order before Sunday at 19:00!\nStill missing: ${names.join(", ")}\n👉 ${location.origin + location.pathname}`;
+  return `🍽️ Lunch week ${wk}: please order before ${fmtDeadline(A.data.deadline)}!\nStill missing: ${names.join(", ")}\n👉 ${location.origin + location.pathname}`;
 }
 function statusPill(){
   const d = A.data;
   if (d.sent_at) return `<span class="pill sent">Sent ${esc(fmtStamp(d.sent_at))}</span>`;
   if (d.locked) return `<span class="pill locked">Locked · ready to send</span>`;
-  return `<span class="pill open">Open · closes Sun 19:00</span>`;
+  return `<span class="pill open">Open · closes ${esc(fmtDeadline(d.deadline))}</span>`;
 }
 
 function renderAdmin(){
@@ -662,6 +674,13 @@ function renderAdmin(){
       <div style="flex:1"></div>${statusPill()}
       <button class="iconbtn" data-act="reload" aria-label="Refresh">${ICON.refresh}</button>
     </div>
+    ${d.week >= d.this_week ? `<div class="dlbar ${d.locked ? "closed" : ""}">
+      <div class="t"><small>Ordering deadline</small>
+        <b>${esc(fmtDeadline(d.deadline))}</b>${d.extended ? `<span class="ext">Extended · normally ${esc(fmtDeadline(d.base_deadline))}</span>` : ""}
+        <span class="hint">${d.locked ? "Closed. Tap +5 hours to reopen ordering for the players who are missing." : "Each tap adds 5 hours to the deadline."}</span></div>
+      <button class="btn sm" data-act="extend" ${A.busy ? "disabled" : ""}>+5 hours</button>
+      ${d.extended ? `<button class="btn sm ghost" data-act="unextend" ${A.busy ? "disabled" : ""}>${new Date(d.base_deadline) <= new Date(d.now) ? "Close now" : "Undo extension"}</button>` : ""}
+    </div>` : ""}
     <nav class="tabs">${[["overview","Overview"],["orders","Orders"],["menus","Menus"],["send","Send"],["settings","Settings"]]
       .map(([k,l]) => `<button class="tab ${A.tab === k ? "on" : ""}" data-act="tab" data-tab="${k}">${l}</button>`).join("")}</nav>`;
   if (A.tab === "overview") html += viewOverview();
@@ -818,7 +837,7 @@ function viewSend(){
   const miss = missingBoth();
   const href = `mailto:${encodeURIComponent(A.mailTo.trim())}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return `
-    ${!d.locked ? `<div class="callout warn">Ordering is still open until Sunday ${fmtDay(addDays(d.week,-1))} at 19:00. The numbers can still change.</div>` : ""}
+    ${!d.locked ? `<div class="callout warn">Ordering is still open until ${fmtDeadline(d.deadline)}. The numbers can still change.</div>` : ""}
     ${miss.length ? `<div class="callout warn">${miss.length} ${miss.length === 1 ? "person hasn't" : "people haven't"} picked for both days: ${esc(miss.map(p => p.name).join(", "))}.</div>` : ""}
     ${d.sent_at ? `<div class="callout ok">Marked as sent ${esc(fmtStamp(d.sent_at))}.</div>` : ""}
     <div class="two">
@@ -944,6 +963,14 @@ document.addEventListener("click", async (ev) => {
   if (act === "tab") { A.tab = el.dataset.tab; renderAdmin(); return; }
   if (act === "wk") { const w = addDays(A.week, Number(el.dataset.d)); A.menuText = ""; await adminRefresh(w); return; }
   if (act === "reload") { await adminRefresh(); toast("Updated"); return; }
+  if (act === "extend" || act === "unextend") {
+    if (A.busy) return; A.busy = true; renderAdmin();
+    try {
+      const r = await rpc("admin_extend", { p_pw:A.pw, p_week:A.week, p_hours: act === "extend" ? 5 : 0 });
+      toast(act === "extend" ? `Open until ${fmtDeadline(r.deadline)}` : "Extension removed");
+    } catch (e) { toast(e.message, true); }
+    A.busy = false; await adminRefresh(); return;
+  }
   if (act === "extra") {
     const id = Number(el.dataset.id);
     const cur = (A.data.extras || []).find(e => e.day === day && e.dish === id);
