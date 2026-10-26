@@ -317,6 +317,10 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 .dlbar b{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.02em}
 .dlbar .ext{font-size:12.5px;color:var(--gold);font-weight:600}
 .dlbar .hint{font-size:13px;color:var(--muted)}
+.confirmbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding:14px;border-radius:14px;background:var(--gold-soft);border:1px solid rgba(247,198,0,.4)}
+.confirmbox .t{flex:1;min-width:220px;display:flex;flex-direction:column;gap:3px;font-size:14px}
+.confirmbox .t b{font-family:var(--display);font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.02em}
+.confirmbox .t span{color:var(--muted)}
 @media (min-width:760px){
   .scrim{align-items:center}
   .sheet{border-radius:22px;border-bottom:1px solid var(--line-2)}
@@ -512,7 +516,7 @@ function renderPlayer(){
           <div class="day"><small>Thursday</small><strong>${fmtDay(s.thu_date)}</strong></div>
         </div>
         <div class="deadline"><span class="pulse ${open ? "" : "closed"}"></span>
-          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · ${fmtDeadline(s.deadline)}` : `<b>Ordering has closed.</b>`}</div>
+          ${open ? `Closes in <b data-cd>${countdown(ms)}</b> · ${fmtDeadline(s.deadline)}` : `<b>Ordering has closed.</b> Message ${CONTACT} if you still need food.`}</div>
         <div class="meter"><i style="width:${total ? Math.round(done/total*100) : 0}%"></i></div>
         <div class="meter-l">${done} of ${total} have ordered</div>
       </section>
@@ -556,7 +560,7 @@ function renderPlayer(){
       return;
     }
     html += who +
-      (open ? "" : `<div class="closed-note">Ordering for week ${wk} has closed. Message ${CONTACT} if something needs changing.</div>`) +
+      (open ? "" : `<div class="closed-note">Ordering for week ${wk} has closed. Message ${CONTACT} if you still need food or want to change something.</div>`) +
       daySection("tue","Tuesday", s.tue_date, s.tue, dr.tue, "p", P.locked.tue) +
       daySection("thu","Thursday", s.thu_date, s.thu, dr.thu, "p", P.locked.thu) +
       `<div class="foot">After you send, your choices are locked. Message ${CONTACT} to change them.</div></div>`;
@@ -625,7 +629,7 @@ async function submitPlayer(){
 }
 
 /* ---------- ADMIN ---------- */
-const A = { pw:null, data:null, tab:"overview", week:null, modal:null, menuText:"", busy:false, mailTo:"" };
+const A = { confirmFinish:false, pw:null, data:null, tab:"overview", week:null, modal:null, menuText:"", busy:false, mailTo:"" };
 
 async function adminLoad(week){
   const d = await rpc("admin_week", { p_pw: A.pw, p_week: week || null });
@@ -658,9 +662,20 @@ function reminderText(){
 }
 function statusPill(){
   const d = A.data;
-  if (d.sent_at) return `<span class="pill sent">Sent ${esc(fmtStamp(d.sent_at))}</span>`;
-  if (d.locked) return `<span class="pill locked">Locked · ready to send</span>`;
+  if (d.finished_at) return `<span class="pill sent">Finished ${esc(fmtStamp(d.finished_at))}</span>`;
+  if (d.locked) return `<span class="pill locked">Closed · send &amp; finish</span>`;
   return `<span class="pill open">Open · closes ${esc(fmtDeadline(d.deadline))}</span>`;
+}
+
+function finishConfirm(){
+  if (!A.confirmFinish || A.data.finished_at) return "";
+  const d = A.data, next = isoWeek(addDays(d.week, 7));
+  return `<div class="confirmbox">
+    <div class="t"><b>Finish week ${isoWeek(d.week)}?</b>
+      <span>Do this once the order is sent to the caterer. Ordering for week ${isoWeek(d.week)} closes for good, and the player page moves on to week ${next}.${missingBoth().length ? ` ${missingBoth().length} still haven't finished ordering.` : ""}</span></div>
+    <button class="btn sm ghost" data-act="finishno">Cancel</button>
+    <button class="btn sm" data-act="finishyes" ${A.busy ? "disabled" : ""}>Yes, finish week</button>
+  </div>`;
 }
 
 function renderAdmin(){
@@ -674,13 +689,18 @@ function renderAdmin(){
       <div style="flex:1"></div>${statusPill()}
       <button class="iconbtn" data-act="reload" aria-label="Refresh">${ICON.refresh}</button>
     </div>
-    ${d.week >= d.this_week ? `<div class="dlbar ${d.locked ? "closed" : ""}">
+    ${d.finished_at ? `<div class="dlbar closed">
+      <div class="t"><small>Week finished</small><b>${esc(fmtStamp(d.finished_at))}</b>
+        <span class="hint">${d.open_week !== d.week ? `Players are now ordering for week ${isoWeek(d.open_week)}.` : "Players can't order for this week anymore."}</span></div>
+      <button class="btn sm ghost" data-act="reopen" ${A.busy ? "disabled" : ""}>Reopen week</button>
+    </div>` : d.week === d.open_week ? `<div class="dlbar ${d.locked ? "closed" : ""}">
       <div class="t"><small>Ordering deadline</small>
         <b>${esc(fmtDeadline(d.deadline))}</b>${d.extended ? `<span class="ext">Extended · normally ${esc(fmtDeadline(d.base_deadline))}</span>` : ""}
-        <span class="hint">${d.locked ? "Closed. Tap +5 hours to reopen ordering for the players who are missing." : "Each tap adds 5 hours to the deadline."}</span></div>
+        <span class="hint">${d.locked ? "Closed. Players stay on this week until you finish it. Tap +5 hours to let late players order." : "Each tap adds 5 hours to the deadline."}</span></div>
       <button class="btn sm" data-act="extend" ${A.busy ? "disabled" : ""}>+5 hours</button>
       ${d.extended ? `<button class="btn sm ghost" data-act="unextend" ${A.busy ? "disabled" : ""}>${new Date(d.base_deadline) <= new Date(d.now) ? "Close now" : "Undo extension"}</button>` : ""}
-    </div>` : ""}
+      ${d.locked ? `<button class="btn sm dark" data-act="finish">Finish week →</button>` : ""}
+    </div>${finishConfirm()}` : ""}
     <nav class="tabs">${[["overview","Overview"],["orders","Orders"],["menus","Menus"],["send","Send"],["settings","Settings"]]
       .map(([k,l]) => `<button class="tab ${A.tab === k ? "on" : ""}" data-act="tab" data-tab="${k}">${l}</button>`).join("")}</nav>`;
   if (A.tab === "overview") html += viewOverview();
@@ -839,7 +859,7 @@ function viewSend(){
   return `
     ${!d.locked ? `<div class="callout warn">Ordering is still open until ${fmtDeadline(d.deadline)}. The numbers can still change.</div>` : ""}
     ${miss.length ? `<div class="callout warn">${miss.length} ${miss.length === 1 ? "person hasn't" : "people haven't"} picked for both days: ${esc(miss.map(p => p.name).join(", "))}.</div>` : ""}
-    ${d.sent_at ? `<div class="callout ok">Marked as sent ${esc(fmtStamp(d.sent_at))}.</div>` : ""}
+
     <div class="two">
       <div class="panel">
         <h3>Recipient</h3>
@@ -851,12 +871,12 @@ function viewSend(){
         <ol style="margin:0;padding-left:18px;font-size:14px;color:var(--muted);line-height:1.6">
           <li>Check the numbers in the preview. The email is in Swedish for the caterer.</li>
           <li>Tap <b style="color:var(--text)">Open in Mail</b>. Everything is filled in, you just press send.</li>
-          <li>Tap <b style="color:var(--text)">Mark as sent</b> here.</li>
+          <li>Tap <b style="color:var(--text)">Finish week</b>. That marks it as sent and moves the players on to next week.</li>
         </ol>
         <div class="toolbar">
           <a class="btn" href="${href}" ${A.mailTo.trim() ? "" : `aria-disabled="true" style="opacity:.35;pointer-events:none"`} data-act="openmail">Open in Mail</a>
           <button class="btn sm dark" data-act="copymail">Copy text</button>
-          <button class="btn sm ghost" data-act="marksent">Mark as sent</button>
+          ${d.finished_at ? "" : `<button class="btn sm ghost" data-act="finish">Finish week</button>`}
         </div>
         ${A.mailTo.trim() ? "" : `<div style="font-size:12.5px;color:var(--faint);margin-top:8px">Fill in the caterer's address first.</div>`}
       </div>
@@ -961,7 +981,7 @@ document.addEventListener("click", async (ev) => {
   // admin
   if (act === "logout") { A.pw = null; A.data = null; store.sdel("aik_admin"); renderLogin(); return; }
   if (act === "tab") { A.tab = el.dataset.tab; renderAdmin(); return; }
-  if (act === "wk") { const w = addDays(A.week, Number(el.dataset.d)); A.menuText = ""; await adminRefresh(w); return; }
+  if (act === "wk") { A.confirmFinish = false; const w = addDays(A.week, Number(el.dataset.d)); A.menuText = ""; await adminRefresh(w); return; }
   if (act === "reload") { await adminRefresh(); toast("Updated"); return; }
   if (act === "extend" || act === "unextend") {
     if (A.busy) return; A.busy = true; renderAdmin();
@@ -1020,8 +1040,17 @@ document.addEventListener("click", async (ev) => {
   }
   if (act === "savemail") { A.mailTo = document.getElementById("mailto").value.trim(); await adminCall("admin_settings", { p_email:A.mailTo, p_new_pw:null }, "Address saved"); return; }
   if (act === "copymail") { const { subject, body } = buildEmail(); return copy(`Ämne: ${subject}\n\n${body}`, "Email text copied"); }
-  if (act === "marksent") { await adminCall("admin_mark_sent", { p_week:A.week }, "Marked as sent"); return; }
-  if (act === "openmail") { setTimeout(() => toast("Tap Mark as sent once the email has gone."), 600); return; }
+  if (act === "finish") { A.confirmFinish = true; renderAdmin(); window.scrollTo({ top: 0, behavior: "smooth" }); return; }
+  if (act === "finishno") { A.confirmFinish = false; renderAdmin(); return; }
+  if (act === "finishyes" || act === "reopen") {
+    if (A.busy) return; A.busy = true; renderAdmin();
+    try {
+      const r = await rpc("admin_finish", { p_pw:A.pw, p_week:A.week, p_done: act === "finishyes" });
+      toast(act === "finishyes" ? `Week ${isoWeek(A.week)} finished. Players now see week ${isoWeek(r.open_week)}.` : `Week ${isoWeek(A.week)} reopened`);
+    } catch (e) { toast(e.message, true); }
+    A.busy = false; A.confirmFinish = false; await adminRefresh(); return;
+  }
+  if (act === "openmail") { setTimeout(() => toast("Tap Finish week once the email has gone."), 600); return; }
   if (act === "psave" || act === "pactive") {
     const id = Number(el.dataset.id), p = A.data.all_people.find(x => x.id === id);
     const name = document.getElementById(`pn-${id}`).value, tag = document.getElementById(`pt-${id}`).value, kind = document.getElementById(`pk-${id}`).value;
