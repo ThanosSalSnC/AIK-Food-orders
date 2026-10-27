@@ -321,6 +321,13 @@ textarea.field{min-height:220px;resize:vertical;line-height:1.5;font-size:14.5px
 .confirmbox .t{flex:1;min-width:220px;display:flex;flex-direction:column;gap:3px;font-size:14px}
 .confirmbox .t b{font-family:var(--display);font-weight:800;font-size:20px;text-transform:uppercase;letter-spacing:.02em}
 .confirmbox .t span{color:var(--muted)}
+.wtabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:6px 0 4px}
+.wtab{display:flex;flex-direction:column;align-items:flex-start;gap:1px;text-align:left;padding:10px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--line);color:var(--muted);min-width:0}
+.wtab b{font-family:var(--display);font-weight:800;font-size:18px;letter-spacing:.04em;text-transform:uppercase;color:var(--text)}
+.wtab span{font-size:12.5px}
+.wtab i{font-style:normal;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-top:3px}
+.wtab i.open{color:var(--ok)}
+.wtab.on{border-color:var(--gold);background:linear-gradient(0deg,var(--gold-soft),var(--gold-soft)),var(--surface)}
 @media (min-width:760px){
   .scrim{align-items:center}
   .sheet{border-radius:22px;border-bottom:1px solid var(--line-2)}
@@ -479,18 +486,34 @@ function daySection(key, label, dateStr, dishes, d, scope, locked = false){
 }
 
 /* ---------- PLAYER ---------- */
-const P = { state:null, view:"names", person:null, draft:null, locked:{tue:false,thu:false}, q:"", saving:false, confirm:false, skew:0, loadingOrder:false };
+const P = { wk:null, state:null, view:"names", person:null, draft:null, locked:{tue:false,thu:false}, q:"", saving:false, confirm:false, skew:0, loadingOrder:false };
 
 async function playerLoad(){
   P.state = await rpc("get_state");
   P.skew = new Date(P.state.now).getTime() - Date.now();
+  if (!P.state.weeks) P.state.weeks = [{ week:P.state.week, deadline:P.state.deadline, tue_date:P.state.tue_date, thu_date:P.state.thu_date, tue:P.state.tue, done:P.state.people.filter(p => p.done).map(p => p.id) }];
+  if (!P.wk || !P.state.weeks.some(w => w.week === P.wk)) P.wk = P.state.default_week || P.state.weeks[0].week;
+}
+function curWeek(){ return P.state.weeks.find(w => w.week === P.wk) || P.state.weeks[0]; }
+function viewState(){
+  const W = curWeek();
+  return { ...W, thu: P.state.thu, people: P.state.people.map(p => ({ ...p, done: W.done.includes(p.id) })) };
+}
+function weekTabs(){
+  const ws = P.state.weeks; if (ws.length < 2) return "";
+  return `<nav class="wtabs" aria-label="Choose week">${ws.map(w => {
+    const isOpen = new Date(w.deadline).getTime() > nowServer();
+    return `<button type="button" class="wtab ${w.week === P.wk ? "on" : ""}" data-act="week" data-w="${w.week}" aria-pressed="${w.week === P.wk}">
+      <b>Week ${isoWeek(w.week)}</b><span>${fmtDay(w.tue_date)} – ${fmtDay(w.thu_date)}</span>
+      <i class="${isOpen ? "open" : ""}">${isOpen ? "Open" : "Closed"}</i></button>`; }).join("")}</nav>`;
 }
 function nowServer(){ return Date.now() + P.skew; }
-function personById(id){ return P.state.people.find(p => p.id === id); }
+function personById(id){ return viewState().people.find(p => p.id === id); }
 const first = n => n.split(" ")[0];
 
 function renderPlayer(){
-  const s = P.state; if (!s) return;
+  if (!P.state) return;
+  const s = viewState();
   const wk = isoWeek(s.week);
   const ms = new Date(s.deadline).getTime() - nowServer();
   const open = ms > 0;
@@ -507,10 +530,10 @@ function renderPlayer(){
         <span class="num ${p.kind === "staff" ? "staff" : ""}">${esc(p.tag || "")}</span>
         <span class="t">${esc(p.name)}<small>${p.done ? "Ordered" : "Not ordered"}</small></span>
         ${p.done ? `<span class="check">${ICON.check}</span>` : ""}</button>`;
-    html += `
+    html += weekTabs() + `
       <section class="fixture">
         <div class="eyebrow">Week ${wk}</div>
-        <h1>Pick your lunch</h1>
+        <h1>${open ? "Pick your lunch" : "Ordering closed"}</h1>
         <div class="days">
           <div class="day"><small>Tuesday</small><strong>${fmtDay(s.tue_date)}</strong></div>
           <div class="day"><small>Thursday</small><strong>${fmtDay(s.thu_date)}</strong></div>
@@ -543,6 +566,7 @@ function renderPlayer(){
   }
 
   if (P.view === "order") {
+    html += weekTabs();
     const allLocked = P.locked.tue && P.locked.thu;
     if (allLocked) {
       html += who + `<div class="done-card">
@@ -605,7 +629,7 @@ async function openPerson(id){
   P.draft = { tue: blankDay(), thu: blankDay() }; P.locked = { tue:false, thu:false };
   P.view = "order"; P.confirm = false; P.loadingOrder = true; renderPlayer(); window.scrollTo({ top: 0 });
   try {
-    const o = await rpc("get_order", { p_person: id, p_week: P.state.week });
+    const wkAsked = P.wk; const o = await rpc("get_order", { p_person: id, p_week: wkAsked }); if (wkAsked !== P.wk) return;
     if (P.person && P.person.id === id) {
       ["tue","thu"].forEach(k => {
         const srv = o && o[k];
@@ -620,9 +644,9 @@ async function submitPlayer(){
   if (P.saving) return;
   P.saving = true; renderPlayer();
   try {
-    await rpc("submit_order", { p_person: P.person.id, p_week: P.state.week,
+    await rpc("submit_order", { p_person: P.person.id, p_week: P.wk,
       p_tue: P.locked.tue ? null : toPayload(P.draft.tue), p_thu: P.locked.thu ? null : toPayload(P.draft.thu) });
-    const me = personById(P.person.id); if (me) me.done = dayChosen(P.draft.tue) && dayChosen(P.draft.thu);
+    const W = curWeek(); if (dayChosen(P.draft.tue) && dayChosen(P.draft.thu) && !W.done.includes(P.person.id)) W.done.push(P.person.id);
     P.view = "done"; P.confirm = false; window.scrollTo({ top: 0 });
   } catch (e) { toast(e.message, true); P.confirm = false; }
   P.saving = false; renderPlayer();
@@ -693,7 +717,7 @@ function renderAdmin(){
       <div class="t"><small>Week finished</small><b>${esc(fmtStamp(d.finished_at))}</b>
         <span class="hint">${d.open_week !== d.week ? `Players are now ordering for week ${isoWeek(d.open_week)}.` : "Players can't order for this week anymore."}</span></div>
       <button class="btn sm ghost" data-act="reopen" ${A.busy ? "disabled" : ""}>Reopen week</button>
-    </div>` : d.week === d.open_week ? `<div class="dlbar ${d.locked ? "closed" : ""}">
+    </div>` : (d.player_weeks || [d.open_week]).includes(d.week) ? `<div class="dlbar ${d.locked ? "closed" : ""}">
       <div class="t"><small>Ordering deadline</small>
         <b>${esc(fmtDeadline(d.deadline))}</b>${d.extended ? `<span class="ext">Extended · normally ${esc(fmtDeadline(d.base_deadline))}</span>` : ""}
         <span class="hint">${d.locked ? "Closed. Players stay on this week until you finish it. Tap +5 hours to let late players order." : "Each tap adds 5 hours to the deadline."}</span></div>
@@ -973,6 +997,12 @@ document.addEventListener("click", async (ev) => {
   }
   // player
   if (act === "person") return openPerson(Number(el.dataset.id));
+  if (act === "week") {
+    if (el.dataset.w === P.wk) return;
+    P.wk = el.dataset.w; P.confirm = false;
+    if (P.person && P.view !== "names") { P.view = "order"; return openPerson(P.person.id); }
+    renderPlayer(); return;
+  }
   if (act === "back") { P.view = "names"; P.person = null; P.confirm = false; renderPlayer(); try { await playerLoad(); renderPlayer(); } catch(e){} window.scrollTo({top:0}); return; }
   if (act === "review") { keepNote("p"); P.confirm = true; renderPlayer(); return; }
   if (act === "unconfirm") { P.confirm = false; renderPlayer(); return; }
@@ -1111,7 +1141,7 @@ async function route(){
   catch (e) { $app.innerHTML = `<div class="wrap">${topbar("Lunch orders")}<div class="closed-note">${esc(e.message)}</div><div class="toolbar"><button class="btn" onclick="location.reload()">Try again</button></div></div>`; return; }
   cdTimer = setInterval(() => {
     const el = document.querySelector("[data-cd]"); if (!el || !P.state) return;
-    const ms = new Date(P.state.deadline).getTime() - nowServer();
+    const ms = new Date(curWeek().deadline).getTime() - nowServer();
     if (ms <= 0) { playerLoad().then(renderPlayer).catch(() => {}); } else el.textContent = countdown(ms);
   }, 30000);
 }
